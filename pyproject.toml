@@ -19,7 +19,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = "^3.9"
 Mopidy = ">=3.0,<5.0"
-tidalapi = "^0.8.7"
+tidalapi = "^0.8.8"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.3.1"
