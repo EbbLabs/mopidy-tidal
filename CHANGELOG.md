@@ -1,5 +1,9 @@
 # Changelog
 
+#### v0.3.12
+
+- tidalapi version bump to v0.8.7
+
 #### v0.3.11
 
 - Bugfix: Set playlist fetch limit to 50 items due to v2 endpoint limitations
