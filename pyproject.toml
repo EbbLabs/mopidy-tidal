@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mopidy-tidal"
-version = "0.3.11"
+version = "0.3.12"
 description = "Mopidy Extension for Tidal music service integration."
 authors = ["Johannes Linde <tehkillerbee@users.noreply.github.com>"]
 license = "Apache License 2.0"
@@ -19,7 +19,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = "^3.9"
 Mopidy = ">=3.0,<5.0"
-tidalapi = "^0.8.6"
+tidalapi = "^0.8.9"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.3.1"

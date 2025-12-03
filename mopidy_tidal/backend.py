@@ -110,7 +110,6 @@ class TidalBackend(ThreadingActor, backend.Backend):
         if client_id and client_secret:
             logger.info("Using client id & client secret from config")
             config.client_id = client_id
-            config.api_token = client_id
             config.client_secret = client_secret
         elif (client_id and not client_secret) or (client_secret and not client_id):
             logger.warning("Always provide both client_id and client_secret")
