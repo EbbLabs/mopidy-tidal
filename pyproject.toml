@@ -7,7 +7,7 @@ license = "Apache-2.0"
 authors = [
     { name = "Johannes Linde", email = "tehkillerbee@users.noreply.github.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 classifiers = [
     "Environment :: No Input/Output (Daemon)",
