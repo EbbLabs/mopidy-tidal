@@ -4,6 +4,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from logging import basicConfig, getLogger
+from ssl import SSLContext
 from typing import Callable, Self
 
 from .cache import Cache, Head, Path
@@ -46,6 +47,10 @@ class Request:
     range_start: int | None
     range_end: int | None
     raw: bytearray
+
+
+def ssl_context() -> SSLContext | None:
+    return None
 
 
 @dataclass
@@ -99,7 +104,9 @@ class Proxy[C: Cache]:
         remote_url = urllib.parse.urlsplit(self.config.remote_url + path.decode())
         ssl = remote_url.scheme == "https"
         remote_port = remote_url.port or (443 if ssl else 443)
-        return await Stream.connect(remote_url.hostname, remote_port, ssl=ssl)
+        return await Stream.connect(
+            remote_url.hostname, remote_port, ssl=ssl_context() or ssl
+        )
 
     async def stream_head(self, local: Stream, remote: Stream) -> bytearray:
         head = bytearray()
