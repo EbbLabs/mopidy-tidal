@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 import httpx
-from pytest import fixture
+from pytest_cases import fixture
 from pytest_httpserver import HTTPServer
 
 from mopidy_tidal.gstreamer_proxy.cache import SQLiteCache
