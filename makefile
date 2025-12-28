@@ -10,12 +10,11 @@ install:
 	pip install dist/*.whl
 
 format:
-	${POETRY} isort --profile=black mopidy_tidal tests
-	${POETRY} black mopidy_tidal tests
+	${POETRY} ruff format
 
 lint:
-	${POETRY} isort --check --profile=black mopidy_tidal tests
-	${POETRY} black --check mopidy_tidal tests
+	${POETRY} ruff check
+	${POETRY} ruff format --check
 
 system-venv:
 	python -m venv .venv --system-site-packages
