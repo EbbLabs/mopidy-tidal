@@ -3,8 +3,9 @@ from dataclasses import dataclass
 from typing import Iterator
 
 import httpx
-from pytest_cases import fixture
+from pytest_cases import fixture, parametrize_with_cases
 from pytest_httpserver import HTTPServer
+import trustme
 
 from mopidy_tidal.gstreamer_proxy.cache import SQLiteCache
 from mopidy_tidal.gstreamer_proxy.proxy import Proxy as ProxyInstance
@@ -32,9 +33,15 @@ class Proxy:
         return f"http://localhost:{self.port}/{path}"
 
 
+class SSLCases:
+    def case_http(self, httpserver: HTTPServer) -> HTTPServer:
+        return httpserver
+
+
 @fixture
-def remote(httpserver: HTTPServer) -> Remote:
-    return Remote(httpserver)
+@parametrize_with_cases("server", cases=SSLCases)
+def remote(server: HTTPServer) -> Remote:
+    return Remote(server)
 
 
 @fixture
