@@ -1,61 +1,65 @@
-[tool.poetry]
+[project]
 name = "mopidy-tidal"
 version = "0.3.12"
 description = "Mopidy Extension for Tidal music service integration."
-authors = ["Johannes Linde <tehkillerbee@users.noreply.github.com>"]
-license = "Apache License 2.0"
 readme = "README.md"
-packages = [{ include = "mopidy_tidal" }]
-repository = "https://github.com/EbbLabs/mopidy-tidal"
+license = { text = "Apache License 2.0" }
+authors = [
+  { name = "Johannes Linde", email = "tehkillerbee@users.noreply.github.com" }
+]
+requires-python = ">=3.9"
+
 classifiers = [
-    "Environment :: No Input/Output (Daemon)",
-    "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Topic :: Multimedia :: Sound/Audio :: Players",
+  "Environment :: No Input/Output (Daemon)",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Players",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-Mopidy = ">=3.0,<5.0"
-tidalapi = "^0.8.9"
+dependencies = [
+  "Mopidy>=3.0,<5.0",
+  "tidalapi>=0.8.9,<0.9.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.3.1"
-pytest-mock = "^3.10.0"
-pytest-sugar = "^0.9.7"
-pytest-cov = "^4.0.0"
-pexpect = "^4.8.0"
-pytest-diff = "^0.1.14"
-ruff = "^0.14.10"
+[project.urls]
+Repository = "https://github.com/EbbLabs/mopidy-tidal"
 
-[tool.poetry.group.complete]
-optional = true
+[dependency-groups]
+dev = [
+  "pytest>=7.3.1,<8.0.0",
+  "pytest-mock>=3.10.0,<4.0.0",
+  "pytest-sugar>=0.9.7,<1.0.0",
+  "pytest-cov>=4.0.0,<5.0.0",
+  "pexpect>=4.8.0,<5.0.0",
+  "pytest-diff>=0.1.14,<1.0.0",
+  "ruff>=0.14.10",
+]
 
-[tool.poetry.group.complete.dependencies]
-pygobject = "^3.44.1"
-mopidy-local = "^3.2.1"
-mopidy-iris = "^3.66.1"
-mopidy-mpd = "^3.3"
+complete = [
+  "pygobject>=3.44.1,<4.0.0",
+  "mopidy-local>=3.2.1,<4.0.0",
+  "mopidy-iris>=3.66.1,<4.0.0",
+  "mopidy-mpd>=3.3,<4.0",
+]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.plugins."mopidy.ext"]
+[project.entry-points."mopidy.ext"]
 tidal = "mopidy_tidal:Extension"
 
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 markers = [
-    "gt_3_10: Mark a test as requiring python > 3.10.",
-    "poor_test: Mark a test in need of improvement",
-    "insufficiently_decoupled: Mark a test as insufficiently decoupled from implementation",
+  "gt_3_10: Mark a test as requiring python > 3.10.",
+  "poor_test: Mark a test in need of improvement",
+  "insufficiently_decoupled: Mark a test as insufficiently decoupled from implementation",
 ]
 filterwarnings = [
-    "error::DeprecationWarning:mopidy[.*]",
-    "error::PendingDeprecationWarning:mopidy[.*]",
+  "error::DeprecationWarning:mopidy[.*]",
+  "error::PendingDeprecationWarning:mopidy[.*]",
 ]
 addopts = "--cov=mopidy_tidal --cov-branch --cov-report=term-missing --cov-report=html"
 testpaths = ["tests"]
