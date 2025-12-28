@@ -19,8 +19,8 @@ classifiers = [
 ]
 
 dependencies = [
-  "Mopidy>=3.0,<5.0",
-  "tidalapi>=0.8.9,<0.9.0",
+  "Mopidy>=3.0",
+  "tidalapi>=0.8.9",
 ]
 
 [project.urls]
@@ -28,20 +28,20 @@ Repository = "https://github.com/EbbLabs/mopidy-tidal"
 
 [dependency-groups]
 dev = [
-  "pytest>=7.3.1,<8.0.0",
-  "pytest-mock>=3.10.0,<4.0.0",
-  "pytest-sugar>=0.9.7,<1.0.0",
-  "pytest-cov>=4.0.0,<5.0.0",
-  "pexpect>=4.8.0,<5.0.0",
-  "pytest-diff>=0.1.14,<1.0.0",
+  "pytest>=7.3.1",
+  "pytest-mock>=3.10.0",
+  "pytest-sugar>=0.9.7",
+  "pytest-cov>=4.0.0",
+  "pexpect>=4.8.0",
+  "pytest-diff>=0.1.14",
   "ruff>=0.14.10",
 ]
 
 complete = [
-  "pygobject>=3.44.1,<4.0.0",
-  "mopidy-local>=3.2.1,<4.0.0",
-  "mopidy-iris>=3.66.1,<4.0.0",
-  "mopidy-mpd>=3.3,<4.0",
+  "pygobject>=3.44.1",
+  "mopidy-local>=3.2.1",
+  "mopidy-iris>=3.66.1",
+  "mopidy-mpd>=3.3",
 ]
 
 [project.entry-points."mopidy.ext"]
