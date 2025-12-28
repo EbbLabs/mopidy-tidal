@@ -75,7 +75,7 @@ class LruCache(OrderedDict):
             except Exception as e:
                 # If the cache entry on the filesystem is corrupt, reset it
                 logger.warning(
-                    "Could not deserialize cache file %s: " "refreshing the entry: %s",
+                    "Could not deserialize cache file %s: refreshing the entry: %s",
                     cache_file,
                     e,
                 )
