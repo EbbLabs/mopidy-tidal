@@ -12,7 +12,6 @@ from mopidy.models import Playlist as MopidyPlaylist
 from mopidy.models import Ref
 from requests import HTTPError
 from tidalapi.playlist import Playlist as TidalPlaylist
-from tidalapi.workers import get_items
 
 from mopidy_tidal import full_models_mappers
 from mopidy_tidal.full_models_mappers import create_mopidy_playlist

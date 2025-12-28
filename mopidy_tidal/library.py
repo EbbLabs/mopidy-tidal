@@ -9,7 +9,6 @@ from mopidy import backend, models
 from mopidy.models import Image, Ref, SearchResult, Track
 from requests.exceptions import HTTPError
 from tidalapi.exceptions import ObjectNotFound, TooManyRequests
-from tidalapi.workers import get_items
 
 from mopidy_tidal import full_models_mappers, ref_models_mappers
 from mopidy_tidal.login_hack import login_hack

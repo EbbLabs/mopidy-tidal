@@ -1,10 +1,9 @@
 import os
 import shutil
-from pathlib import Path
 
 import pytest
 
-from mopidy_tidal.lru_cache import LruCache, SearchCache
+from mopidy_tidal.lru_cache import LruCache
 
 
 @pytest.fixture
