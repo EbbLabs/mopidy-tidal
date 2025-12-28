@@ -14,6 +14,7 @@ format:
 
 lint:
 	${POETRY} ruff check
+	${POETRY} ruff format --check
 
 system-venv:
 	python -m venv .venv --system-site-packages
