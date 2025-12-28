@@ -194,7 +194,6 @@ class TidalPlaylistsProvider(backend.PlaylistsProvider):
         else:
             logger.info("Refreshing TIDAL playlists..")
 
-        session = self.backend.session
         plists = self._current_tidal_playlists
         mapped_playlists = {}
         playlist_cache = self._playlists if include_items else self._playlists_metadata
