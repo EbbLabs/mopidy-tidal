@@ -58,3 +58,10 @@ filterwarnings = [
     "error::DeprecationWarning:mopidy[.*]",
     "error::PendingDeprecationWarning:mopidy[.*]",
 ]
+addopts = "--cov=mopidy_tidal --cov-branch --cov-report=term-missing --cov-report=html"
+testpaths = ["tests"]
+
+[tool.ruff]
+lint.extend-select = [
+"I", # Imports
+]
