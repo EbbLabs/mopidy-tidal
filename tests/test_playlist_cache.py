@@ -1,4 +1,3 @@
-
 import pytest
 
 from mopidy_tidal.playlists import PlaylistCache, PlaylistMetadataCache, TidalPlaylist
