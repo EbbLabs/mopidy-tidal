@@ -1,11 +1,14 @@
+import functools
 import sqlite3
+import ssl
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Iterator, NamedTuple
 
 import httpx
+import pytest_mock
+import trustme
 from pytest_cases import fixture, parametrize_with_cases
 from pytest_httpserver import HTTPServer
-import trustme
 
 from mopidy_tidal.gstreamer_proxy.cache import SQLiteCache
 from mopidy_tidal.gstreamer_proxy.proxy import Proxy as ProxyInstance
@@ -30,12 +33,55 @@ class Proxy:
     proxy: ProxyInstance
 
     def url_for(self, path: str) -> str:
+        # NOTE this is always http: there's no point serving over https on localhost.
         return f"http://localhost:{self.port}/{path}"
+
+
+class SSLContexts(NamedTuple):
+    server: ssl.SSLContext
+    client: ssl.SSLContext
+
+
+@functools.cache
+def ssl_contexts() -> SSLContexts:
+    server = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    client = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    ca = trustme.CA()
+    cert = ca.issue_cert("localhost")
+    cert.configure_cert(server)
+    ca.configure_trust(client)
+
+    return SSLContexts(server, client)
+
+
+@fixture(scope="session")
+def ssl_httpserver() -> Iterator[HTTPServer]:
+    server, _ = ssl_contexts()
+    server = HTTPServer(ssl_context=server)
+    server.start()
+
+    yield server
+
+    server.clear()
+    if server.is_running():
+        server.stop()
 
 
 class SSLCases:
     def case_http(self, httpserver: HTTPServer) -> HTTPServer:
         return httpserver
+
+    def case_https(
+        self, ssl_httpserver: HTTPServer, mocker: pytest_mock.MockFixture
+    ) -> HTTPServer:
+        _, client = ssl_contexts()
+        mocker.patch(
+            "mopidy_tidal.gstreamer_proxy.proxy.ssl_context", return_value=client
+        )
+
+        ssl_httpserver.clear()
+        return ssl_httpserver
 
 
 @fixture
