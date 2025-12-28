@@ -12,7 +12,6 @@ from mopidy.models import Playlist as MopidyPlaylist
 from mopidy.models import Ref
 from requests import HTTPError
 from tidalapi.playlist import Playlist as TidalPlaylist
-from tidalapi.workers import get_items
 
 from mopidy_tidal import full_models_mappers
 from mopidy_tidal.full_models_mappers import create_mopidy_playlist
@@ -195,7 +194,6 @@ class TidalPlaylistsProvider(backend.PlaylistsProvider):
         else:
             logger.info("Refreshing TIDAL playlists..")
 
-        session = self.backend.session
         plists = self._current_tidal_playlists
         mapped_playlists = {}
         playlist_cache = self._playlists if include_items else self._playlists_metadata
