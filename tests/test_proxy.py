@@ -30,11 +30,10 @@ class Remote:
 @dataclass
 class Proxy:
     port: int
-    proxy: ProxyInstance
+    proxy: ThreadedProxy
 
     def url_for(self, path: str) -> str:
-        # NOTE this is always http: there's no point serving over https on localhost.
-        return f"http://localhost:{self.port}/{path}"
+        return self.proxy.config.local_url(f"http://localhost/{path}")
 
 
 class SSLContexts(NamedTuple):
@@ -98,7 +97,7 @@ def proxy(remote: Remote) -> Iterator[Proxy]:
         lambda: SQLiteCache(sqlite3.connect(":memory:")),
     )
     instance = ThreadedProxy(proxy)
-    yield Proxy(instance.config.port, instance.inner)
+    yield Proxy(instance.config.port, instance)
     instance.stop()
 
 
