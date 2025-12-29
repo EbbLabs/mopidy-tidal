@@ -93,7 +93,7 @@ class SparseBuffer:
         other_chunks = (
             shift_out(self.chunks(x))
             for x in self.offsets[
-                offsets.index(start_offset) : offsets.index(end_offset)
+                offsets.index(start_offset) + 1 : offsets.index(end_offset)
             ]
         )
 
