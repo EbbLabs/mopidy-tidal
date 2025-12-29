@@ -37,7 +37,7 @@ class Range(NamedTuple):
         assert unit == b"bytes"
         assert b"," not in range, "Multiple ranges not supported"
         start, end = None, None
-        a, _, b = range.partition(b"-")
+        a, _, b = range.strip().partition(b"-")
         if a:
             start = int(a)
         if b:
