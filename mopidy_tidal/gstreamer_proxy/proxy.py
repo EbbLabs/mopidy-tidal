@@ -93,6 +93,24 @@ def ssl_context() -> SSLContext | None:
     return None
 
 
+@dataclass
+class StatusError(Exception):
+    """Invalid status"""
+
+    status: int
+
+    def __repr__(self) -> str:
+        return f"StatusError({self.status})"
+
+
+def check_status(status: bytes | bytearray) -> None:
+    val = int(status.decode())
+    if 200 <= val <= 300:
+        return None
+    else:
+        raise StatusError(val)
+
+
 type CacheFactory[C] = Callable[[], C]
 
 
@@ -165,7 +183,7 @@ class Proxy[C: Cache]:
         line = await remote.rx.readline()
         protocol, status, *_ = line.split()
         assert protocol.startswith(b"HTTP/1")  # test server uses http/1.0
-        assert 200 <= int(status.decode()) < 300
+        check_status(status)
         head.extend(line)
 
         await local.write(line)
