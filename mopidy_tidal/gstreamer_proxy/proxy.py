@@ -89,6 +89,9 @@ class Request:
     def raw(self) -> bytes:
         return self.raw_first + self.raw_host + self.raw_rest
 
+    def cache_key(self) -> bytes:
+        return self.path.path
+
 
 def ssl_context() -> SSLContext | None:
     """SSL context to use for https.
@@ -208,10 +211,7 @@ class Proxy[C: Cache]:
         del reader, writer
         request = await self.parse_request(local)
 
-        # NOTE: caching is purely on the path, ignoring params, which are used
-        # only for the token.  If this were general we'd need a `cache_key` fn
-        # to allow custom transforms
-        path = Path(request.path.path)
+        path = Path(request.cache_key())
 
         if head := self.cache.get_head(path):
             logger.debug("Serving %s from cache", request.path)
