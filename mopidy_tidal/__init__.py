@@ -38,6 +38,7 @@ class Extension(ext.Extension):
         schema["login_server_port"] = config.Integer(
             optional=True, choices=range(8000, 9000)
         )
+        schema["track_cache"] = config.Boolean(optional=True)
         return schema
 
     def setup(self, registry):

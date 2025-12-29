@@ -29,6 +29,7 @@ def test_config_schema_has_correct_keys():
         "login_method",
         "login_server_port",
         "auth_method",
+        "track_cache",
     }
 
 
