@@ -92,7 +92,7 @@ def remote(server: HTTPServer) -> Remote:
 @fixture
 def proxy(remote: Remote) -> Iterator[Proxy]:
     proxy = ProxyInstance(
-        ProxyConfig(None, remote.server.url_for("/")),
+        ProxyConfig.build(None, remote.server.url_for("/")),
         # DictCache,
         lambda: SQLiteCache(sqlite3.connect(":memory:")),
     )

@@ -17,6 +17,21 @@ basicConfig()
 class ProxyConfig:
     port: int | None
     remote_url: str
+    parsed: urllib.parse.ParseResult
+
+    @classmethod
+    def build(cls, port: int | None, remote_url: str) -> Self:
+        return cls(port, remote_url, urlparse(remote_url))
+
+    def remote_host(self) -> str:
+        assert self.parsed.hostname
+        return self.parsed.hostname
+
+    def ssl(self) -> bool:
+        return self.parsed.scheme == "https"
+
+    def remote_port(self) -> int:
+        return self.parsed.port or (443 if self.ssl() else 80)
 
 
 @dataclass
@@ -58,7 +73,16 @@ class Request:
     keep_alive: bool
     range_start: int | None
     range_end: int | None
-    raw: bytearray
+    raw_first: bytes
+    raw_host: bytes
+    raw_rest: bytearray
+
+    def into_remote(self, remote_host: str, remote_port: int) -> Self:
+        self.raw_host = f"Host: {remote_host}:{remote_port}\r\n".encode()
+        return self
+
+    def raw(self) -> bytes:
+        return self.raw_first + self.raw_host + self.raw_rest
 
 
 def ssl_context() -> SSLContext | None:
@@ -94,9 +118,9 @@ class Proxy[C: Cache]:
         return StartedProxyConfig(port, self.config.remote_url)
 
     async def parse_request(self, local: Stream) -> Request:
-        raw = bytearray()
-        first = await local.rx.readline()
-        verb, path, protocol = first.split()
+        raw_rest = bytearray()
+        raw_first = await local.rx.readline()
+        verb, path, protocol = raw_first.split()
         # Standardise for cache coverage
         if path.startswith(b"//"):
             path = path[1:]
@@ -104,11 +128,14 @@ class Proxy[C: Cache]:
             path = b"/"
         assert verb == b"GET"
         assert protocol == b"HTTP/1.1"
-        raw.extend(first)
         keep_alive: bool = False
         start, end = None, None
+        raw_host = None
         async for line in local.rx:
-            raw.extend(line)
+            if line.startswith(b"Host:"):
+                raw_host = line
+                continue
+            raw_rest.extend(line)
             if b"Connection: keep-alive" in line:
                 keep_alive = True
             elif b"Range:" in line:
@@ -122,14 +149,14 @@ class Proxy[C: Cache]:
                 assert start < end
             if line == b"\r\n":
                 break
-        return Request(path, keep_alive, start, end, raw)
+        assert raw_host, "No host: line in request"
+        return Request(path, keep_alive, start, end, raw_first, raw_host, raw_rest)
 
-    async def open_connection(self, path: bytes) -> Stream:
-        remote_url = urllib.parse.urlsplit(self.config.remote_url + path.decode())
-        ssl = remote_url.scheme == "https"
-        remote_port = remote_url.port or (443 if ssl else 443)
+    async def open_connection(self) -> Stream:
         return await Stream.connect(
-            remote_url.hostname, remote_port, ssl=ssl_context() or ssl
+            self.config.remote_host(),
+            self.config.remote_port(),
+            ssl=self.config.ssl() and (ssl_context() or True),
         )
 
     async def stream_head(self, local: Stream, remote: Stream) -> bytearray:
@@ -203,8 +230,11 @@ class Proxy[C: Cache]:
         else:
             logger.debug("Proxying %s from remote", request.path)
             with self.cache.insertion(path) as insertion:
-                remote = await self.open_connection(request.path)
-                await remote.write(request.raw)
+                remote = await self.open_connection()
+                raw = request.into_remote(
+                    self.config.remote_host(), self.config.remote_port()
+                ).raw()
+                await remote.write(raw)
 
                 head = await self.stream_head(local, remote)
                 insertion.save_head(Head(head))
