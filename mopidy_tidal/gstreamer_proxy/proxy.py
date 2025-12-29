@@ -75,7 +75,7 @@ class Connection:
 
 @dataclass
 class Request:
-    path: bytes
+    path: urllib.parse.ParseResultBytes
     keep_alive: bool
     range: types.Range
     raw_first: bytes
@@ -148,12 +148,9 @@ class Proxy[C: Cache]:
     async def parse_request(self, local: Stream) -> Request:
         raw_rest = bytearray()
         raw_first = await local.rx.readline()
-        verb, path, protocol = raw_first.split()
-        # Standardise for cache coverage
-        if path.startswith(b"//"):
-            path = path[1:]
-        if not path:
-            path = b"/"
+        print(raw_first)
+        verb, path_args, protocol = raw_first.split()
+        path = urlparse(path_args)
         assert verb == b"GET"
         assert protocol == b"HTTP/1.1"
         keep_alive: bool = False
@@ -211,7 +208,10 @@ class Proxy[C: Cache]:
         del reader, writer
         request = await self.parse_request(local)
 
-        path = Path(request.path)
+        # NOTE: caching is purely on the path, ignoring params, which are used
+        # only for the token.  If this were general we'd need a `cache_key` fn
+        # to allow custom transforms
+        path = Path(request.path.path)
 
         if head := self.cache.get_head(path):
             logger.debug("Serving %s from cache", request.path)
