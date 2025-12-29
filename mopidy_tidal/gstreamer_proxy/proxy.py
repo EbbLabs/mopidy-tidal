@@ -62,6 +62,10 @@ class Stream:
         rx, tx = await asyncio.open_connection(*args, **kwargs)
         return cls(rx, tx)
 
+    async def close(self):
+        await self.tx.drain()
+        self.tx.close()
+
 
 @dataclass
 class Connection:
@@ -256,15 +260,20 @@ class Proxy[C: Cache]:
 
                 offset = 0
                 buffer_bytes = 1024 * 64
+                read = 0
                 while True:
                     data = await remote.rx.read(buffer_bytes)
+                    read += len(data)
                     if not data:  # socket closed
                         break
                     await local.write(data)
                     insertion.save_body_chunk(data, offset)
                     offset += len(data)
-                    if len(data) < buffer_bytes:  # partial read
+                    if read == content_length:
                         break
+
+                await remote.close()
+                await local.close()
 
                 # TODO minimal validation: parse the header enough to find the
                 # length and check we got the right length
