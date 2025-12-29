@@ -2,6 +2,7 @@ import asyncio
 import multiprocessing
 import threading
 import urllib.parse
+from contextlib import suppress
 from dataclasses import dataclass, field
 from logging import basicConfig, getLogger
 from ssl import SSLContext
@@ -63,7 +64,8 @@ class Stream:
         return cls(rx, tx)
 
     async def close(self):
-        await self.tx.drain()
+        with suppress(ConnectionError):
+            await self.tx.drain()
         self.tx.close()
 
 
