@@ -216,7 +216,7 @@ class Proxy[C: Cache]:
         path = Path(request.cache_key())
 
         if head := self.cache.get_head(path):
-            logger.debug("Serving %s from cache", request.path)
+            logger.debug("Serving %s from cache", request.path.path)
             if not (range := request.range).empty():
                 parsed = types.Head.from_raw(head)
                 assert parsed.content_length
@@ -243,7 +243,7 @@ class Proxy[C: Cache]:
                 await local.write(chunk)
 
         else:
-            logger.debug("Proxying %s from remote", request.path)
+            logger.debug("Proxying %s from remote", request.path.path)
             with self.cache.insertion(path) as insertion:
                 remote = await self.open_connection()
                 raw = request.into_remote(
