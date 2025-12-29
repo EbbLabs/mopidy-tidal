@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from logging import basicConfig, getLogger
 from ssl import SSLContext
 from typing import Callable, Self
+from urllib.parse import urlparse, urlunparse
 
 from .cache import Cache, Head, Path
 
@@ -22,6 +23,10 @@ class ProxyConfig:
 class StartedProxyConfig:
     port: int
     remote_url: str
+
+    def local_url(self, remote_url: str) -> str:
+        parsed = urlparse(remote_url)._replace(scheme='http', netloc=f"localhost:{self.port}")
+        return urlunparse(parsed)
 
 
 @dataclass
