@@ -9,7 +9,7 @@ from urllib.parse import urlparse, urlunparse
 
 from .cache import Cache, Head, Path
 
-logger = getLogger()
+logger = getLogger(__name__)
 basicConfig()
 
 
