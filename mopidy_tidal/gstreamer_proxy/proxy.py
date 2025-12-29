@@ -8,6 +8,7 @@ from ssl import SSLContext
 from typing import Callable, Self
 from urllib.parse import urlparse, urlunparse
 
+from . import types
 from .cache import Cache, Head, Path
 
 logger = getLogger(__name__)
@@ -72,8 +73,7 @@ class Connection:
 class Request:
     path: bytes
     keep_alive: bool
-    range_start: int | None
-    range_end: int | None
+    range: types.Range
     raw_first: bytes
     raw_host: bytes
     raw_rest: bytearray
@@ -153,7 +153,7 @@ class Proxy[C: Cache]:
         assert verb == b"GET"
         assert protocol == b"HTTP/1.1"
         keep_alive: bool = False
-        start, end = None, None
+        range = types.Range(None, None)
         raw_host = None
         async for line in local.rx:
             if line.startswith(b"Host:"):
@@ -163,18 +163,11 @@ class Proxy[C: Cache]:
             if b"Connection: keep-alive" in line:
                 keep_alive = True
             elif b"Range:" in line:
-                unit, range = line[7:].split(b"=")
-                assert unit == b"bytes"
-                # TODO parse this properly and break out parsing.
-                # bytes=-500
-                # bytes=9500-
-                # bytes=0-0,-1
-                start, end = (int(x) for x in range.split(b"-"))
-                assert start < end
+                range = types.Range.parse_header(line)
             if line == b"\r\n":
                 break
         assert raw_host, "No host: line in request"
-        return Request(path, keep_alive, start, end, raw_first, raw_host, raw_rest)
+        return Request(path, keep_alive, range, raw_first, raw_host, raw_rest)
 
     async def open_connection(self) -> Stream:
         return await Stream.connect(
@@ -183,7 +176,7 @@ class Proxy[C: Cache]:
             ssl=self.config.ssl() and (ssl_context() or True),
         )
 
-    async def stream_head(self, local: Stream, remote: Stream) -> bytearray:
+    async def stream_head(self, local: Stream, remote: Stream) -> types.Head:
         head = bytearray()
 
         line = await remote.rx.readline()
@@ -200,7 +193,7 @@ class Proxy[C: Cache]:
             if line == b"\r\n":
                 break
 
-        return head
+        return types.Head.from_raw(head)
 
     async def error(self, local: Stream, code: int = 400, msg: bytes = b"") -> None:
         await local.write(f"HTTP/1.1 {code}\r\n\r\n".encode())
@@ -218,23 +211,21 @@ class Proxy[C: Cache]:
 
         if head := self.cache.get_head(path):
             logger.debug("Serving %s from cache", request.path)
-            if request.range_start is not None:
-                assert request.range_end is not None
-                start = request.range_start
-                end = request.range_end
-                chunks = self.cache.get_body_chunk(path, start, end)
+            if not (range := request.range).empty():
+                parsed = types.Head.from_raw(head)
+                assert parsed.content_length
+                range = range.expand(parsed.content_length)
+                start, end, _ = range
 
-                if start < 0 or end > chunks.total:
-                    return await self.error(local, 400)
+                chunks = self.cache.get_body_chunk(path, start, end)
 
                 head_lines = head.splitlines()[1:-1]
                 del head
                 head_lines = [h for h in head_lines if b"Content-Length" not in h]
                 head_lines.insert(0, b"HTTP/1.1 206 Partial Content")
+
                 head_lines.append(f"Content-Length: {end + 1 - start}".encode())
-                head_lines.append(
-                    f"Content-Range: bytes {start}-{end}/{chunks.total}".encode()
-                )
+                head_lines.append(range.to_header().encode())
                 head_lines.append(b"")
                 head_lines.append(b"")
                 await local.write(b"\r\n".join(head_lines))
@@ -260,7 +251,7 @@ class Proxy[C: Cache]:
                 ).raw()
                 await remote.write(raw)
 
-                head = await self.stream_head(local, remote)
+                head, content_length = await self.stream_head(local, remote)
                 insertion.save_head(Head(bytes(head)))
 
                 body = bytearray()

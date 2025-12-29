@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Iterator, NamedTuple
 
 import httpx
+import pytest
 import pytest_mock
 import trustme
 from pytest_cases import fixture, parametrize_with_cases
@@ -13,6 +14,7 @@ from pytest_httpserver import HTTPServer
 from mopidy_tidal.gstreamer_proxy.cache import SQLiteCache
 from mopidy_tidal.gstreamer_proxy.proxy import Proxy as ProxyInstance
 from mopidy_tidal.gstreamer_proxy.proxy import ProxyConfig, ThreadedProxy
+from mopidy_tidal.gstreamer_proxy.types import FullRange, Range
 
 
 @dataclass
@@ -157,3 +159,51 @@ class TestCacheHit:
 
         assert resp.status_code == 206
         assert data == b"345"
+
+
+class TestRangeParsed:
+    def test_from_simple_header(self):
+        assert Range.parse_header(b"Range: bytes=1-10") == Range(1, 10)
+
+    def test_from_open_end(self):
+        assert Range.parse_header(b"Range: bytes=1-") == Range(1, None)
+
+    def test_from_open_start(self):
+        assert Range.parse_header(b"Range: bytes=-10") == Range(None, 10)
+
+    def test_raises_if_units_not_bytes(self):
+        with pytest.raises(Exception):
+            Range.parse_header(b"Range: kilobytes=-10")
+
+    def test_raises_if_completely_invalid(self):
+        with pytest.raises(Exception):
+            Range.parse_header(b"Hi: There")
+
+    def test_raises_if_multiple_ranges_supplied(self):
+        with pytest.raises(Exception):
+            Range.parse_header(b"Range: bytes=1-2,10-")
+
+
+class TestRangeSerialised:
+    def test_to_header_when_simple(self):
+        assert Range(1, 10).to_header() == "Range: bytes=1-10"
+
+    def test_to_header_when_open_ended(self):
+        assert Range(1, None).to_header() == "Range: bytes=1-"
+
+    def test_to_header_when_open_start(self):
+        assert Range(None, 10).to_header() == "Range: bytes=-10"
+
+    def test_to_none_when_neither_end_present(self):
+        assert Range(None, None).to_header() is None
+
+
+class TestFullRange:
+    def test_hydrated_from_half_empty_range(self):
+        assert Range(1, None).expand(20) == FullRange(1, 20, 20)
+
+    def test_hydrated_from_range(self):
+        assert Range(1, 10).expand(20) == FullRange(1, 10, 20)
+
+    def test_serialised_to_response_header(self):
+        assert FullRange(1, 10, 20).to_header() == "Content-Range: bytes 1-10/20"
