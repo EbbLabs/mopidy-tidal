@@ -254,8 +254,8 @@ class Proxy[C: Cache]:
                 head, content_length = await self.stream_head(local, remote)
                 insertion.save_head(Head(bytes(head)))
 
-                buffer_bytes = 1024 * 1024 * 2 # 2 MiB for now
-                buffer = bytearray()
+                buffer_bytes = 1024 * 1024 * 2  # 2 MiB for now
+                buffer = types.Buffer.with_capacity(buffer_bytes)
                 offset = 0
                 read = 0
                 finished = False
@@ -271,17 +271,16 @@ class Proxy[C: Cache]:
 
                     finished = read == content_length
 
-                    if len(buffer) >= buffer_bytes or finished:
-                        await local.write(buffer)
-                        insertion.save_body_chunk(buffer, offset)
-                        offset += len(buffer)
+                    if buffer.contains >= buffer_bytes or finished:
+                        await local.write(buffer.data())
+                        insertion.save_body_chunk(buffer.data(), offset)
+                        offset += buffer.contains
                         buffer.clear()
-
 
                 await remote.close()
                 await local.close()
 
-                if read==content_length:
+                if read == content_length:
                     insertion.finalise()
 
 

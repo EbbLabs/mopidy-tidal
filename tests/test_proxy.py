@@ -14,7 +14,7 @@ from pytest_httpserver import HTTPServer
 from mopidy_tidal.gstreamer_proxy.cache import SQLiteCache
 from mopidy_tidal.gstreamer_proxy.proxy import Proxy as ProxyInstance
 from mopidy_tidal.gstreamer_proxy.proxy import ProxyConfig, ThreadedProxy
-from mopidy_tidal.gstreamer_proxy.types import FullRange, Range
+from mopidy_tidal.gstreamer_proxy.types import Buffer, FullRange, Range
 
 
 @dataclass
@@ -207,3 +207,40 @@ class TestFullRange:
 
     def test_serialised_to_response_header(self):
         assert FullRange(1, 10, 20).to_header() == "Content-Range: bytes 1-10/20"
+
+
+class TestBuffer:
+    def test_extends(self):
+        buffer = Buffer.with_capacity(10)
+
+        buffer.extend(b"123")
+
+        assert buffer.capacity == 10
+        assert buffer.contains == 3
+        assert buffer.data() == b"123"
+
+    def test_extends_past_end(self):
+        buffer = Buffer.with_capacity(4)
+
+        buffer.extend(b"\x12\x34")
+        buffer.extend(b"\x22\x34")
+        buffer.extend(b"\x32\x34")
+
+        assert buffer.data() == bytearray(b"\x12\x34\x22\x34\x32\x34")
+        assert buffer.contains == 6
+        assert buffer.capacity == 6
+
+    def test_clears_and_can_be_reused(self):
+        buffer = Buffer.with_capacity(10)
+
+        buffer.extend(b"12345")
+        buffer.extend(b"22345")
+
+        assert buffer.contains == 10
+        assert buffer.data() == bytearray(b"1234522345")
+
+        buffer.clear()
+        buffer.extend(b"67890")
+
+        assert buffer.contains == 5
+        assert buffer.data() == b"67890"
