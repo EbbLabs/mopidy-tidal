@@ -2,10 +2,10 @@ import sqlite3
 from pathlib import Path
 
 from .cache import SQLiteCache
-from .proxy import Proxy, ProxyConfig, ThreadedProxy
+from .proxy import ProcessProxy, Proxy, ProxyConfig
 
 
-def mopidy_track_cache(path: Path) -> ThreadedProxy:
+def mopidy_track_cache(path: Path) -> ProcessProxy:
     path.parent.mkdir(parents=True, exist_ok=True)
     proxy = Proxy(
         ProxyConfig.build(
@@ -14,6 +14,6 @@ def mopidy_track_cache(path: Path) -> ThreadedProxy:
         ),
         lambda: SQLiteCache(sqlite3.connect(path)),
     )
-    instance = ThreadedProxy(proxy)
+    instance = ProcessProxy(proxy)
 
     return instance
