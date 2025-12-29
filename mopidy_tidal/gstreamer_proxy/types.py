@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import NamedTuple, Self
 
 
@@ -60,3 +61,32 @@ class Head(NamedTuple):
             return cls(raw, int(val))
         else:
             return cls(raw, None)
+
+
+@dataclass
+class Buffer:
+    """A buffer backed by a bytearray. The buffer will outgrow the stated capacity if needed."""
+
+    capacity: int
+    contains: int
+    _data: bytearray
+
+    # TODO make this constant size in ram?
+    @classmethod
+    def with_capacity(cls, capacity: int) -> Self:
+        _data = bytearray(capacity)
+        _data.clear()
+        return cls(capacity, 0, _data)
+
+    def data(self) -> bytearray:
+        return self._data[: self.contains]
+
+    def clear(self) -> None:
+        self.contains = 0
+        self._data.clear()
+
+    def extend(self, data: bytes) -> None:
+        self.contains += len(data)
+        self._data.extend(data)
+        if self.contains > self.capacity:
+            self.capacity = len(self._data)
