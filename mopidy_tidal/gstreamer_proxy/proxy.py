@@ -275,9 +275,8 @@ class Proxy[C: Cache]:
                 await remote.close()
                 await local.close()
 
-                # TODO minimal validation: parse the header enough to find the
-                # length and check we got the right length
-                insertion.finalise()
+                if read==content_length:
+                    insertion.finalise()
 
 
 class ThreadedProxy:
