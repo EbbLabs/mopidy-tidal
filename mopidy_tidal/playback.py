@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import tidalapi
 from login_hack import speak_login_hack
+from tidalapi.exceptions import URLNotAvailable
 
 if TYPE_CHECKING:  # pragma: no cover
     from mopidy_tidal.backend import TidalBackend
@@ -83,4 +84,13 @@ class TidalPlaybackProvider(backend.PlaybackProvider):
                 )
 
         track = session.track(track_id)
+        if proxy := self.backend.track_cache:
+            try:
+                url = track.get_url()
+            except URLNotAvailable:
+                logger.info(
+                    "No direct url available for %s, falling back to stream", track.id
+                )
+            else:
+                return proxy.config.local_url(url)
         return as_stream(track)
