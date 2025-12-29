@@ -62,6 +62,10 @@ class Request:
 
 
 def ssl_context() -> SSLContext | None:
+    """SSL context to use for https.
+
+    This is overridden when testing so we can trust our local TLS cert. There is
+    probably no reason to use it otherwise."""
     return None
 
 
