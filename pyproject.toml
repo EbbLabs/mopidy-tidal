@@ -39,6 +39,7 @@ dev = [
   "pytest-httpserver>=1.1.3",
   "pytest-cases>=3.9.1",
   "trustme>=1.2.1",
+  "ipython>=9.8.0",
 ]
 
 complete = [
@@ -46,6 +47,10 @@ complete = [
   "mopidy-local>=3.2.1",
   "mopidy-iris>=3.66.1",
   "mopidy-mpd>=3.3",
+]
+test = [
+    "mopidy-iris>=3.70.0",
+    "mopidy-local>=3.3.0",
 ]
 
 [project.entry-points."mopidy.ext"]
