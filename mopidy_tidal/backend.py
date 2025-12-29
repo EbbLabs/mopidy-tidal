@@ -244,3 +244,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
                     login_url, self.login_server_port, self.pkce_enabled
                 )
             return f"{self._login_url}" if self._login_url else None
+
+    def on_stop(self) -> None:
+        if cache := self.track_cache:
+            cache.stop()

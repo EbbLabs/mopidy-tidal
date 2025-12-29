@@ -13,5 +13,4 @@ def mopidy_track_cache(path: Path) -> ThreadedProxy:
     )
     instance = ThreadedProxy(proxy)
 
-    # TODO check if we need to add a shutdown hook for this thread
     return instance
