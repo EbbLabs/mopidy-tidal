@@ -1,6 +1,5 @@
 import asyncio
 import threading
-import time
 import urllib.parse
 from dataclasses import dataclass, field
 from logging import basicConfig, getLogger
@@ -16,6 +15,12 @@ basicConfig()
 @dataclass
 class ProxyConfig:
     port: int | None
+    remote_url: str
+
+
+@dataclass
+class StartedProxyConfig:
+    port: int
     remote_url: str
 
 
@@ -53,26 +58,29 @@ def ssl_context() -> SSLContext | None:
     return None
 
 
+type CacheFactory[C] = Callable[[], C]
+
 @dataclass
 class Proxy[C: Cache]:
     config: ProxyConfig
-    cache_factory: Callable[[], C]
+    cache_factory: CacheFactory[C]
     started: bool = False
     event: asyncio.Event = field(default_factory=asyncio.Event)
+
 
     async def block(self) -> None:
         await self.event.wait()
         logger.info("Proxy exiting...")
 
-    async def start(self) -> None:
+    async def start(self) -> StartedProxyConfig:
         self.cache = self.cache_factory()
         server = await asyncio.start_server(
             self.handle_request, "127.0.0.1", self.config.port or 0
         )
         _, port = server.sockets[0].getsockname()
-        self.config.port = port
         self.cache.init()
         self.started = True
+        return StartedProxyConfig(port, self.config.remote_url)
 
     async def parse_request(self, local: Stream) -> Request:
         raw = bytearray()
@@ -204,11 +212,6 @@ class Proxy[C: Cache]:
                 # length and check we got the right length
                 insertion.finalise()
 
-    def port(self) -> int:
-        assert self.config.port, ".port() called before .start()"
-        return self.config.port
-
-
 class ThreadedProxy:
     def __init__(self, proxy: Proxy) -> None:
         self.inner = proxy
@@ -217,12 +220,9 @@ class ThreadedProxy:
             target=lambda: loop.run_until_complete(proxy.block())
         )
         self.thread.start()
-        loop.call_soon_threadsafe(lambda: loop.create_task(proxy.start()))
+        self.config = asyncio.run_coroutine_threadsafe(proxy.start(), loop).result()
         self.loop = loop
 
-    def wait_for_start(self):
-        while not self.inner.started:
-            time.sleep(0.01)
 
     def stop(self, block: bool = True):
         self.loop.call_soon_threadsafe(lambda: self.inner.event.set())

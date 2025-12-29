@@ -98,8 +98,7 @@ def proxy(remote: Remote) -> Iterator[Proxy]:
         lambda: SQLiteCache(sqlite3.connect(":memory:")),
     )
     instance = ThreadedProxy(proxy)
-    instance.wait_for_start()
-    yield Proxy(instance.inner.port(), instance.inner)
+    yield Proxy(instance.config.port, instance.inner)
     instance.stop()
 
 
