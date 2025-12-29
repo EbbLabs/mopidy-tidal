@@ -1,4 +1,5 @@
 import asyncio
+import multiprocessing
 import threading
 import urllib.parse
 from dataclasses import dataclass, field
@@ -124,6 +125,11 @@ class Proxy[C: Cache]:
     async def block(self) -> None:
         await self.event.wait()
         logger.info("Proxy exiting...")
+
+    async def block_start(self, queue: multiprocessing.Queue) -> None:
+        config = await self.start()
+        queue.put(config)
+        await self.block()
 
     async def start(self) -> StartedProxyConfig:
         self.cache = self.cache_factory()
@@ -292,3 +298,23 @@ class ThreadedProxy:
         self.loop.call_soon_threadsafe(lambda: self.inner.event.set())
         if block:
             self.thread.join()
+
+
+class ProcessProxy:
+    def __init__(self, proxy: Proxy) -> None:
+        from multiprocessing import Process
+
+        self.inner = proxy
+        loop = asyncio.new_event_loop()
+        queue = multiprocessing.Queue(1)
+        self.proc = Process(
+            target=lambda: loop.run_until_complete(proxy.block_start(queue))
+        )
+        self.proc.start()
+        self.config = queue.get()
+        print(self.config)
+
+    def stop(self, block: bool = True):
+        self.proc.terminate()
+        if block:
+            self.proc.join()
