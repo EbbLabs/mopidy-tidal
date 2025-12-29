@@ -254,15 +254,12 @@ class Proxy[C: Cache]:
                 head, content_length = await self.stream_head(local, remote)
                 insertion.save_head(Head(bytes(head)))
 
-                body = bytearray()
-
                 offset = 0
                 buffer_bytes = 1024 * 64
                 while True:
                     data = await remote.rx.read(buffer_bytes)
                     if not data:  # socket closed
                         break
-                    body.extend(data)
                     await local.write(data)
                     insertion.save_body_chunk(data, offset)
                     offset += len(data)
