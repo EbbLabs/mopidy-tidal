@@ -237,14 +237,8 @@ class Proxy[C: Cache]:
                 await local.write(head)
                 chunks = self.cache.get_body(path)
 
-            buffer_bytes = 1024 * 64
             for chunk in chunks.data:
-                assert chunk
-                start = 0
-                end = max(len(chunk), len(chunk) - buffer_bytes)
-                while start < end:
-                    await local.write(chunk[start:end])
-                    start += buffer_bytes
+                await local.write(chunk)
 
         else:
             logger.debug("Proxying %s from remote", request.path)
