@@ -237,7 +237,7 @@ class Proxy[C: Cache]:
                 await remote.write(raw)
 
                 head = await self.stream_head(local, remote)
-                insertion.save_head(Head(head))
+                insertion.save_head(Head(bytes(head)))
 
                 body = bytearray()
 
