@@ -25,7 +25,9 @@ class StartedProxyConfig:
     remote_url: str
 
     def local_url(self, remote_url: str) -> str:
-        parsed = urlparse(remote_url)._replace(scheme='http', netloc=f"localhost:{self.port}")
+        parsed = urlparse(remote_url)._replace(
+            scheme="http", netloc=f"localhost:{self.port}"
+        )
         return urlunparse(parsed)
 
 
@@ -65,13 +67,13 @@ def ssl_context() -> SSLContext | None:
 
 type CacheFactory[C] = Callable[[], C]
 
+
 @dataclass
 class Proxy[C: Cache]:
     config: ProxyConfig
     cache_factory: CacheFactory[C]
     started: bool = False
     event: asyncio.Event = field(default_factory=asyncio.Event)
-
 
     async def block(self) -> None:
         await self.event.wait()
@@ -91,6 +93,11 @@ class Proxy[C: Cache]:
         raw = bytearray()
         first = await local.rx.readline()
         verb, path, protocol = first.split()
+        # Standardise for cache coverage
+        if path.startswith(b"//"):
+            path = path[1:]
+        if not path:
+            path = b"/"
         assert verb == b"GET"
         assert protocol == b"HTTP/1.1"
         raw.extend(first)
@@ -217,6 +224,7 @@ class Proxy[C: Cache]:
                 # length and check we got the right length
                 insertion.finalise()
 
+
 class ThreadedProxy:
     def __init__(self, proxy: Proxy) -> None:
         self.inner = proxy
@@ -227,7 +235,6 @@ class ThreadedProxy:
         self.thread.start()
         self.config = asyncio.run_coroutine_threadsafe(proxy.start(), loop).result()
         self.loop = loop
-
 
     def stop(self, block: bool = True):
         self.loop.call_soon_threadsafe(lambda: self.inner.event.set())
