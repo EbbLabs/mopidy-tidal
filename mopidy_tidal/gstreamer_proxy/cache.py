@@ -211,7 +211,7 @@ class SQLiteCache(Cache[SqliteInsertion]):
 create table if not exists head
 (
    id integer primary key autoincrement
-   , path varchar unique
+   , path varchar
    , data blob
    , timestamp timestamp default CURRENT_TIMESTAMP
 );
@@ -220,7 +220,7 @@ create table if not exists head
 create table if not exists body
 (
    id integer primary key autoincrement
-   , path varchar unique
+   , path varchar
    , start integer
    , data blob
    , len integer
