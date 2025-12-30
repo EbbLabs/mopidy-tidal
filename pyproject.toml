@@ -51,6 +51,7 @@ complete = [
 test = [
     "mopidy-iris>=3.70.0",
     "mopidy-local>=3.3.0",
+    "mopidy-mpd>=3.3.0",
 ]
 
 [project.entry-points."mopidy.ext"]

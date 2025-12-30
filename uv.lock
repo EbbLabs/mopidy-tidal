@@ -612,6 +612,7 @@ dev = [
 test = [
     { name = "mopidy-iris" },
     { name = "mopidy-local" },
+    { name = "mopidy-mpd" },
 ]
 
 [package.metadata]
@@ -644,6 +645,7 @@ dev = [
 test = [
     { name = "mopidy-iris", specifier = ">=3.70.0" },
     { name = "mopidy-local", specifier = ">=3.3.0" },
+    { name = "mopidy-mpd", specifier = ">=3.3.0" },
 ]
 
 [[package]]
