@@ -166,7 +166,7 @@ class Proxy[C: Cache]:
                 raw_host = line
                 continue
             raw_rest.extend(line)
-            if b"Connection: keep-alive" in line:
+            if b"keep-alive" in line:
                 keep_alive = True
             elif b"Range:" in line:
                 range = types.Range.parse_header(line)
