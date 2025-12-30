@@ -55,12 +55,19 @@ class Head(NamedTuple):
 
     @classmethod
     def from_raw(cls, raw: bytes | bytearray) -> Self:
-        if (idx := raw.lower().index(b"content-length")) > 0:
+        length = None
+        lower = raw.lower()
+
+        try:
+            idx = lower.index(b"content-length")
+        except ValueError:
+            pass
+        else:
             length_line = raw[idx : idx + 100].splitlines()[0]
             _, val = length_line.split(b":")
-            return cls(raw, int(val))
-        else:
-            return cls(raw, None)
+            length = int(val)
+
+        return cls(raw, length)
 
 
 @dataclass
