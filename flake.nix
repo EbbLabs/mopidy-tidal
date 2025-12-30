@@ -35,6 +35,7 @@
             glib-networking
             # integration tests
             mpc
+            mopidy-mpd
             # local testing
             mopidy-local
             mopidy-iris
