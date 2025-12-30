@@ -41,7 +41,7 @@ jobs:
           uv pip show mopidy
       - name: Install mopidy-tidal
         run: |
-          uv sync --group test
+          uv sync --group complete
 
       - name: Integration test
         run: make integration-test
