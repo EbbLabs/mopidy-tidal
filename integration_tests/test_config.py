@@ -2,13 +2,7 @@ from pathlib import Path
 
 import pytest
 
-
-def mopidy(config_dir: Path, config: str, cache_dir: Path) -> str:
-    return (
-        f"mopidy --config {(config_dir / config).resolve()} "
-        f"-o core/cache_dir={cache_dir} "
-        f"-o core/data_dir={cache_dir}"
-    )
+from .util import mopidy
 
 
 def test_basic_config_loads_tidal_generates_auth_url(
