@@ -52,6 +52,7 @@ class Range(NamedTuple):
 class Head(NamedTuple):
     raw: bytes | bytearray
     content_length: int | None
+    keep_alive: bool | None
 
     @classmethod
     def from_raw(cls, raw: bytes | bytearray) -> Self:
@@ -67,7 +68,9 @@ class Head(NamedTuple):
             _, val = length_line.split(b":")
             length = int(val)
 
-        return cls(raw, length)
+        keep_alive = True if b"connection: keep-alive" in lower else None
+
+        return cls(raw, length, keep_alive)
 
 
 @dataclass

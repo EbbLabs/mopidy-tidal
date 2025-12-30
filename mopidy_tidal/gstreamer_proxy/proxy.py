@@ -251,7 +251,7 @@ class Proxy[C: Cache]:
                 ).raw()
                 await remote.write(raw)
 
-                head, content_length = await self.stream_head(local, remote)
+                head, content_length, keep_alive = await self.stream_head(local, remote)
                 insertion.save_head(Head(bytes(head)))
 
                 buffer_bytes = 1024 * 1024 * 2  # 2 MiB for now
