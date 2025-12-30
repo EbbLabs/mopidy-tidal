@@ -19,22 +19,20 @@
           inherit system;
         };
         python = pkgs.python313;
-        # 'build time' deps
         buildInputs =
           (with pkgs; [
             (python.withPackages (ps:
               with ps; [
                 gst-python
                 pygobject3
-                # packages not specified in pyproject.toml: these will be available in the venv.
               ]))
             uv
             pre-commit
             ruff
-            gobject-introspection
+            mopidy # for its build inputs: it would be nice to do this properly, but I can't seem to get network playing to work
           ])
           ++ (with pkgs.gst_all_1; [
-            # glib-networking
+            pkgs.glib-networking
             gst-plugins-bad
             gst-plugins-base
             gst-plugins-good
@@ -42,9 +40,6 @@
             gst-plugins-rs
           ]);
         env = {
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-            pkgs.stdenv.cc.cc # allow building c extensions
-          ];
           UV_PROJECT_ENVIRONMENT = ".direnv/venv";
         };
       in
