@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-          cache-suffix: ${{ matrix.python-version }}
+          cache-suffix: ${{ matrix.python-version }}-${{ matrix.mopidy-version }}
 
       - name: Install Mopidy system-wide
         run: |
