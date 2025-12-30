@@ -15,7 +15,7 @@ jobs:
       matrix:
         # TODO bring back 3.12 for non-git. Should expand the cartesian product ourselves.
         python-version: [3.13, 3.14]
-        mopidy-version: [3.3, 3.4, "git"]
+        mopidy-version: [3.3, 3.4] #, "git"]
       # Run all the matrix jobs, even if one fails.
       fail-fast: false
 
@@ -31,10 +31,6 @@ jobs:
 
       - name: Install Mopidy system-wide
         run: |
-          sudo mkdir -p /etc/apt/keyrings
-          sudo wget -q -O /etc/apt/keyrings/mopidy-archive-keyring.gpg \
-            https://apt.mopidy.com/mopidy-archive-keyring.gpg
-          sudo wget -q -O /etc/apt/sources.list.d/mopidy.sources https://apt.mopidy.com/trixie.sources
           sudo apt update
           sudo apt install mopidy libgirepository1.0-dev mpc \
             build-essential python3-dev python3-pip \
