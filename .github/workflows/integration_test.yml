@@ -29,7 +29,20 @@ jobs:
           cache-suffix: ${{ matrix.python-version }}
 
       - name: Install Mopidy system-wide
-        run: sudo apt update && sudo apt install mopidy libgirepository1.0-dev mpc
+        run: |
+          sudo apt update
+          sudo apt install mopidy libgirepository1.0-dev mpc \
+            build-essential python3-dev python3-pip \
+            gir1.2-gst-plugins-base-1.0 \
+            gir1.2-gstreamer-1.0 \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-ugly \
+            gstreamer1.0-tools \
+            libcairo2-dev \
+            libgirepository-2.0-dev \
+            python3-gst-1.0
+
+
 
       - name: Correct mopidy version
         run: |
@@ -41,8 +54,7 @@ jobs:
           uv pip show mopidy
       - name: Install mopidy-tidal
         run: |
-          make system-venv
-          uv sync --group test
+          uv sync --group complete
 
       - name: Integration test
         run: make integration-test
