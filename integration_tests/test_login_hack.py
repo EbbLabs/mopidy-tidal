@@ -1,4 +1,8 @@
+from pathlib import Path
+
 import pytest
+
+from .util import mopidy
 
 
 @pytest.mark.parametrize(
@@ -17,20 +21,25 @@ import pytest
         "Comment",
     ),
 )
-def test_link_on_mpc_list_with_hack_login(type, spawn, config_dir):
-    config = config_dir / "lazy_hack.conf"
-    with spawn(f"mopidy --config {config.resolve()}") as child:
-        child.expect("Connecting to TIDAL... Quality = LOSSLESS")
-        child.expect("Starting GLib mainloop")
+def test_link_on_mpc_list_with_hack_login(
+    type, spawn, config_dir: Path, tmp_path: Path
+):
+    with spawn(mopidy(config_dir, "lazy_hack.conf", tmp_path)) as child:
+        child.expect("Quality: LOSSLESS")
+        child.expect("Authentication: OAuth")
+        child.expect("MPD server running")
+
         with spawn(f"mpc list {type}") as mpc:
-            mpc.expect("Please visit .*link.tidal.com/.* to log in")
+            mpc.expect(".* visit https://link.tidal.com/.*")
 
 
-def test_user_warned_if_lazy_set_implicitly(spawn, config_dir):
-    config = config_dir / "hack.conf"
-    with spawn(f"mopidy --config {config.resolve()}") as child:
-        child.expect("Connecting to TIDAL... Quality = LOSSLESS")
-        child.expect("HACK login implies lazy connection")
+def test_user_warned_if_lazy_set_implicitly(spawn, config_dir: Path, tmp_path: Path):
+    with spawn(mopidy(config_dir, "hack.conf", tmp_path)) as child:
+        child.expect("Quality: LOSSLESS")
+        child.expect("Authentication: OAuth")
+        child.expect("implies lazy connection")
+        child.expect("MPD server running")
         child.expect("Starting GLib mainloop")
+
         with spawn("mpc list artist") as mpc:
-            mpc.expect("Please visit .*link.tidal.com/.* to log in")
+            mpc.expect(".* visit https://link.tidal.com/.*")
