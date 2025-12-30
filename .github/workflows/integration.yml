@@ -1,8 +1,8 @@
 name: Integration Test
 
 on:
-  schedule:
-    - cron: "0 0 * * 0" # weekly
+  # schedule:
+  #   - cron: "0 0 * * 0" # weekly
   push:
   pull_request:
     types: [opened, synchronize]
