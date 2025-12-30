@@ -30,6 +30,8 @@
             pre-commit
             ruff
             mopidy # for its build inputs: it would be nice to do this properly, but I can't seem to get network playing to work
+            gobject-introspection
+            mpc # integration tests
           ])
           ++ (with pkgs.gst_all_1; [
             pkgs.glib-networking
