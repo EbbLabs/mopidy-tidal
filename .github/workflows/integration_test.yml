@@ -1,8 +1,8 @@
 name: Integration Test
 
 on:
-  # schedule:
-  #   - cron: "0 0 * * 0" # weekly
+  schedule:
+    - cron: "0 0 * * 0" # weekly
   push:
   pull_request:
     types: [opened, synchronize]
@@ -41,7 +41,8 @@ jobs:
           uv pip show mopidy
       - name: Install mopidy-tidal
         run: |
-          uv sync --group complete
+          make system-venv
+          uv sync --group test
 
       - name: Integration test
         run: make integration-test

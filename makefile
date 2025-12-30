@@ -17,8 +17,7 @@ lint:
 	${UV} ruff format --check
 
 system-venv:
-	python -m venv .venv --system-site-packages
-	bash -c "source .venv/bin/activate && uv install"
+	uv venv --system-site-packages
 	@printf "You now need to activate the venv by sourcing the right file, e.g. source .venv/bin/activate\n"
 
 test:
