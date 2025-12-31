@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import sqlite3
 import ssl
@@ -8,10 +9,17 @@ import httpx
 import pytest
 import pytest_mock
 import trustme
-from pytest_cases import fixture, parametrize_with_cases
+from pytest_cases import fixture, parametrize, parametrize_with_cases
 from pytest_httpserver import HTTPServer
 
-from mopidy_tidal.gstreamer_proxy.cache import SQLiteCache
+from mopidy_tidal.gstreamer_proxy.cache import (
+    Cache,
+    DictCache,
+    Head,
+    Insertion,
+    Path,
+    SQLiteCache,
+)
 from mopidy_tidal.gstreamer_proxy.proxy import Proxy as ProxyInstance
 from mopidy_tidal.gstreamer_proxy.proxy import ProxyConfig, ThreadedProxy
 from mopidy_tidal.gstreamer_proxy.types import Buffer, FullRange, Range
@@ -244,3 +252,119 @@ class TestBuffer:
 
         assert buffer.contains == 5
         assert buffer.data() == b"67890"
+
+
+class CacheCases:
+    def case_dict(self) -> DictCache:
+        cache = DictCache()
+        cache.init()
+        return cache
+
+    def case_sqlite(self) -> SQLiteCache:
+        db = sqlite3.connect(":memory:", check_same_thread=False)
+        cache = SQLiteCache(db)
+        cache.init()
+        return cache
+
+
+@parametrize_with_cases("cache", cases=CacheCases)
+class TestCache:
+    def test_an_empty_cache_has_no_heads(self, cache: Cache):
+        assert not cache.get_head(Path(b"foo"))
+
+    def test_an_empty_cache_has_no_bodies(self, cache: Cache):
+        assert not cache.get_body(Path(b"foo")).total
+
+    def test_a_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
+        with cache.insertion(Path(b"foo")) as insertion:
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.save_body_chunk(b"data", 4)
+            insertion.finalise()
+
+        assert cache.get_head(Path(b"foo")) == b"head"
+
+        body = b"".join(cache.get_body(Path(b"foo")).data)
+        assert body == b"bodydata"
+
+    def test_an_unfinalised_record_cannot_be_retrieved(self, cache: Cache[Insertion]):
+        with cache.insertion(Path(b"foo")) as insertion:
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.save_body_chunk(b"data", 4)
+
+        assert not cache.get_head(Path(b"foo"))
+        assert not cache.get_body(Path(b"foo")).total
+
+    @parametrize("n_concurrent", [2, 8, 24, 64, 128])
+    async def test_the_same_path_can_be_inserted_concurrently(
+        self, cache: Cache[Insertion], n_concurrent: int
+    ):
+        """This is not particularly useful, but it's better to insert the path
+        than to e.g. corrupt the data. So long as we return a complete record,
+        the cache will still work.
+
+        Note the pool ensures this can't happen in normal operation *when
+        driven by mopidy*. But we don't reject connections from other sockets,
+        so someone might trigger a parallel insertion by e.g. clicking on the
+        translated link they see in the debug logs.
+
+        This test is the full spec for concurrent insertions: none will raise,
+        and at least one will succeed, and you will only ever get one record
+        back.
+        """
+
+        semaphore = asyncio.Semaphore(n_concurrent)
+
+        async def insert():
+            async with semaphore:
+                with cache.insertion(Path(b"foo")) as insertion:
+                    insertion.save_head(Head(b"head"))
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"body", 0)
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"data", 4)
+                    await asyncio.sleep(0)
+                    insertion.finalise()
+                    await asyncio.sleep(0)
+
+        await asyncio.gather(*(insert() for _ in range(128)))
+
+        assert cache.get_head(Path(b"foo")) == b"head"
+        body = b"".join(cache.get_body(Path(b"foo")).data)
+        assert body == b"bodydata"
+
+        body = b"".join(cache.get_body(Path(b"foo")).data)
+        assert body == b"bodydata"
+
+    @parametrize("n_concurrent", [2, 8, 24, 64, 128])
+    async def test_different_paths_can_be_inserted_concurrently(
+        self, cache: Cache[Insertion], n_concurrent: int
+    ):
+        semaphore = asyncio.Semaphore(n_concurrent)
+
+        async def insert(id: int):
+            async with semaphore:
+                with cache.insertion(Path(f"foo-{id}".encode())) as insertion:
+                    await asyncio.sleep(0)
+                    insertion.save_head(Head(f"head-{id}".encode()))
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"body", 0)
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"data", 4)
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(id.to_bytes(8), 8)
+                    await asyncio.sleep(0)
+                    insertion.finalise()
+                    await asyncio.sleep(0)
+
+        await asyncio.gather(*(insert(i) for i in range(128)))
+
+        for id in range(128):
+            path = Path(f"foo-{id}".encode())
+
+            assert cache.get_head(path) == f"head-{id}".encode()
+
+            body = b"".join(cache.get_body(path).data)
+            assert body[:8] == b"bodydata"
+            assert int.from_bytes(body[8:]) == id

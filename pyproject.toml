@@ -40,6 +40,7 @@ dev = [
   "pytest-cases>=3.9.1",
   "trustme>=1.2.1",
   "ipython>=9.8.0",
+  "pytest-asyncio>=1.3.0",
 ]
 
 complete = [
@@ -73,6 +74,7 @@ filterwarnings = [
 ]
 addopts = "--cov=mopidy_tidal --cov-branch --cov-report=term-missing --cov-report=html"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 lint.extend-select = [
