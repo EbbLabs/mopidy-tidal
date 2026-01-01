@@ -284,7 +284,6 @@ class Proxy[C: Cache]:
                 while not finished:
                     data = await remote.rx.read(buffer_bytes)
                     read += len(data)
-                    print(read, content_length)
                     if not data:  # socket closed
                         break
                     buffer.extend(data)
