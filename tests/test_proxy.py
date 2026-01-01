@@ -160,12 +160,14 @@ class TestCacheHit:
         data = resp.read()
 
         assert resp.status_code == 200
+        assert resp.headers["Content-Length"] == "5"
         assert data == b"12345"
 
         resp = httpx.get(proxy.url_for("/foo"), headers={"Range": "bytes=2-4"})
         data = resp.read()
 
         assert resp.headers["Content-Range"] == "bytes 2-4/5"
+        assert resp.headers["Content-Length"] == "3"
         assert resp.status_code == 206
         assert data == b"345"
 
