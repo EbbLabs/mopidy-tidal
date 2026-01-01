@@ -319,7 +319,6 @@ class ProcessProxy:
         )
         self.proc.start()
         self.config = queue.get()
-        print(self.config)
 
     def stop(self, block: bool = True):
         self.proc.terminate()
