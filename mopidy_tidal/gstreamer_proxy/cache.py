@@ -214,6 +214,7 @@ create table if not exists head
    , path varchar
    , data blob
    , timestamp timestamp default CURRENT_TIMESTAMP
+   , last_used timestamp default CURRENT_TIMESTAMP
 );
             """)
             conn.execute("""
@@ -225,6 +226,7 @@ create table if not exists body
    , data blob
    , len integer
    , timestamp timestamp default CURRENT_TIMESTAMP
+   , last_used timestamp default CURRENT_TIMESTAMP
 );
             """)
             conn.execute("create index if not exists head_idx on head (path);")
