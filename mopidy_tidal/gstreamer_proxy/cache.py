@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, ContextManager, NewType, Self, Sequence, assert_never
+from uuid import uuid4
 
 Bytes = bytes | bytearray
 Head = NewType("Head", bytes)
@@ -169,21 +170,27 @@ class DictCache(Cache[DictInsertion]):
             self.bodies[path] = insertion.body
 
 
+def entry_id() -> bytes:
+    return uuid4().bytes
+
+
 @dataclass
 class SqliteInsertion(Insertion):
     cur: sqlite3.Cursor
     path: Path
     final: bool = False
+    entry_id: bytes = field(default_factory=entry_id)
 
     def save_head(self, head: Head) -> None:
         self.cur.execute(
-            "INSERT INTO head (path, data) VALUES (?, ?)", (self.path, head)
+            "INSERT INTO head (entry_id, path, data) VALUES (?, ?, ?)",
+            (self.entry_id, self.path, head),
         )
 
     def save_body_chunk(self, data: Bytes, start: int) -> None:
         self.cur.execute(
-            "INSERT INTO body (path, start, data, len) VALUES (?, ?, ?, ?)",
-            (self.path, start, data, len(data)),
+            "INSERT INTO body (entry_id, path, start, data, len) VALUES (?, ?, ?, ?, ?)",
+            (self.entry_id, self.path, start, data, len(data)),
         )
 
     def finalise(self) -> None:
@@ -191,7 +198,25 @@ class SqliteInsertion(Insertion):
 
 
 def _metadata(cur: sqlite3.Cursor, path: Path) -> tuple[int, list[int]]:
-    cur.execute("select start, len from body where path=?;", (path,))
+    cur.execute(
+        """
+WITH entries AS (
+  SELECT DISTINCT
+    entry_id
+  FROM
+    body
+  WHERE
+    is_final AND path=?
+  LIMIT 1
+)
+SELECT
+  start
+  , len
+FROM body
+JOIN entries ON body.entry_id=entries.entry_id
+    """,
+        (path,),
+    )
     offsets = []
     total = 0
     for start, length in cur.fetchall():
@@ -211,6 +236,8 @@ class SQLiteCache(Cache[SqliteInsertion]):
 create table if not exists head
 (
    id integer primary key autoincrement
+   , entry_id blob
+   , is_final integer default false
    , path varchar
    , data blob
    , timestamp timestamp default CURRENT_TIMESTAMP
@@ -221,6 +248,8 @@ create table if not exists head
 create table if not exists body
 (
    id integer primary key autoincrement
+   , entry_id blob
+   , is_final integer default false
    , path varchar
    , start integer
    , data blob
@@ -234,7 +263,7 @@ create table if not exists body
 
     def get_head(self, path: Path) -> Head | None:
         row = self.conn.execute(
-            "SELECT data FROM head WHERE path=? LIMIT 1", (path,)
+            "SELECT data FROM head WHERE path=? AND is_final LIMIT 1", (path,)
         ).fetchone()
         match row:
             case [head]:
@@ -269,4 +298,10 @@ create table if not exists body
         yield insertion
 
         if insertion.final:
+            cur.execute(
+                "UPDATE body SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
+            )
+            cur.execute(
+                "UPDATE head SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
+            )
             self.conn.commit()
