@@ -217,7 +217,7 @@ class Proxy[C: Cache]:
         path = Path(request.cache_key())
 
         if head := self.cache.get_head(path):
-            logger.debug("Serving %s from cache", request.path.path)
+            logger.debug("Serving %s from cache (%s)", request.path.path, request.range)
             if not (range := request.range).empty():
                 parsed = types.Head.from_raw(head)
                 assert parsed.content_length
