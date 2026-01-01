@@ -298,7 +298,8 @@ class Proxy[C: Cache]:
                         buffer.clear()
 
                 await remote.close()
-                await local.close()
+                if not keep_alive:
+                    await local.close()
 
                 # right now we just throw away partial requests. We *could* in
                 # theory save them and try to assemble later, but that's
