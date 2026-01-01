@@ -131,6 +131,7 @@ class DictInsertion(Insertion):
         self.head = head
 
     def save_body_chunk(self, data: Bytes, start: int) -> None:
+        assert start not in self.body, start
         self.body[start] = data
 
     def finalise(self) -> None:
