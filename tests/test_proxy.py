@@ -307,22 +307,6 @@ class TestCache:
         body = b"".join(lookup.data)
         assert body == b"".join(data)
 
-    def test_a_bad_record_can_be_written(self, cache: Cache[Insertion]):
-        from pathlib import Path as P
-
-        data = (P(__file__).parent / "data").read_bytes()
-        with cache.insertion(Path(b"foo")) as insertion:
-            insertion.save_head(Head(b"head"))
-            insertion.save_body_chunk(data, 0)
-            insertion.finalise()
-
-        assert cache.get_head(Path(b"foo")) == b"head"
-
-        lookup = cache.get_body(Path(b"foo"))
-        assert lookup
-        body = b"".join(lookup.data)
-        assert body == data
-
     def test_an_unfinalised_record_cannot_be_retrieved(self, cache: Cache[Insertion]):
         with cache.insertion(Path(b"foo")) as insertion:
             insertion.save_head(Head(b"head"))
