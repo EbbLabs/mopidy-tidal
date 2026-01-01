@@ -165,6 +165,7 @@ class TestCacheHit:
         resp = httpx.get(proxy.url_for("/foo"), headers={"Range": "bytes=2-4"})
         data = resp.read()
 
+        assert resp.headers["Content-Range"] == "bytes 2-4/5"
         assert resp.status_code == 206
         assert data == b"345"
 
@@ -208,7 +209,8 @@ class TestRangeSerialised:
 
 class TestFullRange:
     def test_hydrated_from_half_empty_range(self):
-        assert Range(1, None).expand(20) == FullRange(1, 20, 20)
+        assert Range(1, None).expand(20) == FullRange(1, 19, 20)
+        assert Range(None, 19).expand(20) == FullRange(0, 19, 20)
 
     def test_hydrated_from_range(self):
         assert Range(1, 10).expand(20) == FullRange(1, 10, 20)
