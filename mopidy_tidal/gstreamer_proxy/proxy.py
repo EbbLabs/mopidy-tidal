@@ -155,7 +155,6 @@ class Proxy[C: Cache]:
     async def parse_request(self, local: Stream) -> Request:
         raw_rest = bytearray()
         raw_first = await local.rx.readline()
-        print(raw_first)
         verb, path_args, protocol = raw_first.split()
         path = urlparse(path_args)
         assert verb == b"GET"
