@@ -148,7 +148,9 @@ class Proxy[C: Cache]:
         _, port = server.sockets[0].getsockname()
         self.cache.init()
         self.started = True
-        return StartedProxyConfig(port, self.config.remote_url)
+        config = StartedProxyConfig(port, self.config.remote_url)
+        logger.debug("Proxy config: %s", config)
+        return config
 
     async def parse_request(self, local: Stream) -> Request:
         raw_rest = bytearray()
