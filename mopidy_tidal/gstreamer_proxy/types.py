@@ -17,7 +17,7 @@ class Range(NamedTuple):
 
     def expand(self, total: int) -> FullRange:
         return FullRange(
-            self.start or 0, total if self.end is None else self.end, total
+            self.start or 0, total - 1 if self.end is None else self.end, total
         )
 
     def to_header(self) -> str | None:
