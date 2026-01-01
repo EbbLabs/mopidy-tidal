@@ -169,6 +169,25 @@ class TestCacheHit:
         assert resp.status_code == 206
         assert data == b"345"
 
+    def test_last_byte_comes_from_cache(self, remote: Remote, proxy: Proxy):
+        remote.add_ordered_resources(
+            ("/foo", b"12345"),
+            ("/foo", b"67890"),
+        )
+
+        resp = httpx.get(proxy.url_for("/foo"))
+        data = resp.read()
+
+        assert resp.status_code == 200
+        assert data == b"12345"
+
+        resp = httpx.get(proxy.url_for("/foo"), headers={"Range": "bytes=4-"})
+        data = resp.read()
+
+        assert resp.headers["Content-Range"] == "bytes 4-4/5"
+        assert resp.status_code == 206
+        assert data == b"5"
+
 
 class TestRangeParsed:
     def test_from_simple_header(self):
