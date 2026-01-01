@@ -261,7 +261,7 @@ class CacheCases:
         return cache
 
     def case_sqlite(self) -> SQLiteCache:
-        db = sqlite3.connect(":memory:", check_same_thread=False)
+        db = sqlite3.connect(":memory:")
         cache = SQLiteCache(db)
         cache.init()
         return cache
@@ -273,7 +273,7 @@ class TestCache:
         assert not cache.get_head(Path(b"foo"))
 
     def test_an_empty_cache_has_no_bodies(self, cache: Cache):
-        assert not cache.get_body(Path(b"foo")).total
+        assert not cache.get_body(Path(b"foo"))
 
     def test_a_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
         with cache.insertion(Path(b"foo")) as insertion:
@@ -284,7 +284,9 @@ class TestCache:
 
         assert cache.get_head(Path(b"foo")) == b"head"
 
-        body = b"".join(cache.get_body(Path(b"foo")).data)
+        lookup = cache.get_body(Path(b"foo"))
+        assert lookup
+        body = b"".join(lookup.data)
         assert body == b"bodydata"
 
     def test_a_long_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
@@ -295,13 +297,31 @@ class TestCache:
             last = 0
             for chunk in data:
                 insertion.save_body_chunk(chunk, last)
-                last  += len(chunk)
+                last += len(chunk)
             insertion.finalise()
 
         assert cache.get_head(Path(b"foo")) == b"head"
 
-        body = b"".join(cache.get_body(Path(b"foo")).data)
+        lookup = cache.get_body(Path(b"foo"))
+        assert lookup
+        body = b"".join(lookup.data)
         assert body == b"".join(data)
+
+    def test_a_bad_record_can_be_written(self, cache: Cache[Insertion]):
+        from pathlib import Path as P
+
+        data = (P(__file__).parent / "data").read_bytes()
+        with cache.insertion(Path(b"foo")) as insertion:
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(data, 0)
+            insertion.finalise()
+
+        assert cache.get_head(Path(b"foo")) == b"head"
+
+        lookup = cache.get_body(Path(b"foo"))
+        assert lookup
+        body = b"".join(lookup.data)
+        assert body == data
 
     def test_an_unfinalised_record_cannot_be_retrieved(self, cache: Cache[Insertion]):
         with cache.insertion(Path(b"foo")) as insertion:
@@ -310,7 +330,7 @@ class TestCache:
             insertion.save_body_chunk(b"data", 4)
 
         assert not cache.get_head(Path(b"foo"))
-        assert not cache.get_body(Path(b"foo")).total
+        assert not cache.get_body(Path(b"foo"))
 
     @parametrize("n_concurrent", [2, 8, 24, 64, 128])
     async def test_the_same_path_can_be_inserted_concurrently(
@@ -347,10 +367,14 @@ class TestCache:
         await asyncio.gather(*(insert() for _ in range(128)))
 
         assert cache.get_head(Path(b"foo")) == b"head"
-        body = b"".join(cache.get_body(Path(b"foo")).data)
+        lookup = cache.get_body(Path(b"foo"))
+        assert lookup
+        body = b"".join(lookup.data)
         assert body == b"bodydata"
 
-        body = b"".join(cache.get_body(Path(b"foo")).data)
+        lookup = cache.get_body(Path(b"foo"))
+        assert lookup
+        body = b"".join(lookup.data)
         assert body == b"bodydata"
 
     @parametrize("n_concurrent", [2, 8, 24, 64, 128])
@@ -381,6 +405,8 @@ class TestCache:
 
             assert cache.get_head(path) == f"head-{id}".encode()
 
-            body = b"".join(cache.get_body(path).data)
+            lookup = cache.get_body(path)
+            assert lookup
+            body = b"".join(lookup.data)
             assert body[:8] == b"bodydata"
             assert int.from_bytes(body[8:]) == id
