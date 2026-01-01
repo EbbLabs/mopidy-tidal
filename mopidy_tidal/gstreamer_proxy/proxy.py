@@ -259,6 +259,7 @@ class Proxy[C: Cache]:
                 await local.write(head)
                 chunks = self.cache.get_body(path)
 
+            assert chunks
             for chunk in chunks.data:
                 await local.write(chunk)
 
