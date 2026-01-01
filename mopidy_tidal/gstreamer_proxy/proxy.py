@@ -4,9 +4,10 @@ import threading
 import urllib.parse
 from contextlib import suppress
 from dataclasses import dataclass, field
+from functools import wraps
 from logging import basicConfig, getLogger
 from ssl import SSLContext
-from typing import Callable, Self
+from typing import Awaitable, Callable, Self
 from urllib.parse import urlparse, urlunparse
 
 from . import types
@@ -124,6 +125,23 @@ def check_status(status: bytes | bytearray) -> None:
 type CacheFactory[C] = Callable[[], C]
 
 
+class Ignore:
+    def __init__(self, *exceptions: type[Exception]) -> None:
+        self.exceptions = exceptions
+
+    def __call__[**P](
+        self, fn: Callable[P, Awaitable[None]]
+    ) -> Callable[P, Awaitable[None]]:
+        @wraps(fn)
+        async def inner(*args: P.args, **kwargs: P.kwargs) -> None:
+            try:
+                await fn(*args, **kwargs)
+            except self.exceptions as e:
+                logger.error("Ignoring exception: %s", repr(e))
+
+        return inner
+
+
 @dataclass
 class Proxy[C: Cache]:
     config: ProxyConfig
@@ -207,6 +225,7 @@ class Proxy[C: Cache]:
         if msg:
             await local.write(msg)
 
+    @Ignore(ConnectionError)
     async def handle_request(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
