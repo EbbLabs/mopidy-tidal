@@ -73,6 +73,7 @@ class SparseBuffer:
     chunks: Callable[[int], Bytes]
 
     def get_range(self, start: int, end: int) -> Iterator[Bytes]:
+        end += 1  # http uses closed ranges
         offsets = sorted(self.offsets)
 
         start_offset = None
@@ -312,7 +313,9 @@ create table if not exists body
         if metadata := _metadata(cur, path):
             total, offsets, entry_id = metadata
             return Chunk(
-                data=SparseBuffer.from_db(cur, entry_id, *offsets).get_range(0, total),
+                data=SparseBuffer.from_db(cur, entry_id, *offsets).get_range(
+                    0, total - 1
+                ),
                 total=total,
             )
 
