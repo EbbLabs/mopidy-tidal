@@ -287,6 +287,22 @@ class TestCache:
         body = b"".join(cache.get_body(Path(b"foo")).data)
         assert body == b"bodydata"
 
+    def test_a_long_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
+        data = [f"body-{i}".encode() for i in range(128)]
+
+        with cache.insertion(Path(b"foo")) as insertion:
+            insertion.save_head(Head(b"head"))
+            last = 0
+            for chunk in data:
+                insertion.save_body_chunk(chunk, last)
+                last  += len(chunk)
+            insertion.finalise()
+
+        assert cache.get_head(Path(b"foo")) == b"head"
+
+        body = b"".join(cache.get_body(Path(b"foo")).data)
+        assert body == b"".join(data)
+
     def test_an_unfinalised_record_cannot_be_retrieved(self, cache: Cache[Insertion]):
         with cache.insertion(Path(b"foo")) as insertion:
             insertion.save_head(Head(b"head"))
