@@ -280,7 +280,13 @@ class Proxy[C: Cache]:
                 await remote.close()
                 await local.close()
 
-                if read == content_length:
+                # right now we just throw away partial requests. We *could* in
+                # theory save them and try to assemble later, but that's
+                # probably more hassle than it's worth.
+                if read == content_length and request.range.empty():
+                    logger.debug(
+                        "Fetched whole record; finalising insertion %s", insertion
+                    )
                     insertion.finalise()
 
 
