@@ -4,12 +4,21 @@ from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, ContextManager, NewType, Self, Sequence, assert_never
+from typing import (
+    Callable,
+    ContextManager,
+    NamedTuple,
+    NewType,
+    Self,
+    Sequence,
+    assert_never,
+)
 from uuid import uuid4
 
 Bytes = bytes | bytearray
 Head = NewType("Head", bytes)
 Path = NewType("Path", bytes)
+EntryID = NewType("EntryID", bytes)
 
 
 @dataclass
@@ -41,11 +50,11 @@ class Cache[I: Insertion](ABC):
         """Get the head if present for the given path."""
 
     @abstractmethod
-    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk:
+    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
         """Get a chunk of the body in the given half-closed range."""
 
     @abstractmethod
-    def get_body(self, path: Path) -> Chunk:
+    def get_body(self, path: Path) -> Chunk | None:
         """Get the whole body."""
 
     @abstractmethod
@@ -113,9 +122,11 @@ class SparseBuffer:
         return cls(tuple(data.keys()), data.__getitem__)
 
     @classmethod
-    def from_db(cls, cur: sqlite3.Cursor, path: Path, *offsets: int) -> Self:
+    def from_db(cls, cur: sqlite3.Cursor, entry_id: EntryID, *offsets: int) -> Self:
         def get_chunk(start: int) -> Bytes:
-            cur.execute("SELECT data FROM body WHERE path=? and start=?", (path, start))
+            cur.execute(
+                "SELECT data FROM body WHERE entry_id=? AND start=?", (entry_id, start)
+            )
             return cur.fetchone()[0]
 
         return cls(offsets, get_chunk)
@@ -148,16 +159,23 @@ class DictCache(Cache[DictInsertion]):
     def get_head(self, path: Path) -> Head | None:
         return self.heads.get(path)
 
-    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk:
-        data = SparseBuffer.from_dict(self.bodies[path]).get_range(start, end)
-        total = sum(len(x) for x in self.bodies[path].values())
-        return Chunk(data, total)
-
-    def get_body(self, path: Path) -> Chunk:
+    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
         chunks = self.bodies[path]
-        data = [chunks[x] for x in sorted(chunks)]
-        total = sum(len(x) for x in self.bodies[path].values())
-        return Chunk(iter(data), total)
+        if chunks:
+            data = SparseBuffer.from_dict(chunks).get_range(start, end)
+            total = sum(len(x) for x in chunks.values())
+            return Chunk(data, total)
+        else:
+            return None
+
+    def get_body(self, path: Path) -> Chunk | None:
+        chunks = self.bodies[path]
+        if chunks:
+            data = [chunks[x] for x in sorted(chunks)]
+            total = sum(len(x) for x in self.bodies[path].values())
+            return Chunk(iter(data), total)
+        else:
+            return None
 
     # TODO test this actually drops correctly
     @contextmanager
@@ -171,8 +189,8 @@ class DictCache(Cache[DictInsertion]):
             self.bodies[path] = insertion.body
 
 
-def entry_id() -> bytes:
-    return uuid4().bytes
+def entry_id() -> EntryID:
+    return EntryID(uuid4().bytes)
 
 
 @dataclass
@@ -180,7 +198,7 @@ class SqliteInsertion(Insertion):
     cur: sqlite3.Cursor
     path: Path
     final: bool = False
-    entry_id: bytes = field(default_factory=entry_id)
+    entry_id: EntryID = field(default_factory=entry_id)
 
     def save_head(self, head: Head) -> None:
         self.cur.execute(
@@ -198,7 +216,13 @@ class SqliteInsertion(Insertion):
         self.final = True
 
 
-def _metadata(cur: sqlite3.Cursor, path: Path) -> tuple[int, list[int]]:
+class Metadata(NamedTuple):
+    total: int
+    offsets: list[int]
+    entry_id: EntryID
+
+
+def _metadata(cur: sqlite3.Cursor, path: Path) -> Metadata | None:
     cur.execute(
         """
 WITH entries AS (
@@ -213,6 +237,7 @@ WITH entries AS (
 SELECT
   start
   , len
+  , body.entry_id
 FROM body
 JOIN entries ON body.entry_id=entries.entry_id
     """,
@@ -220,11 +245,15 @@ JOIN entries ON body.entry_id=entries.entry_id
     )
     offsets = []
     total = 0
-    for start, length in cur.fetchall():
+    entry_id = None
+    for start, length, entry_id in cur.fetchall():
         offsets.append(start)
         total += length
 
-    return total, offsets
+    if entry_id:
+        return Metadata(total, offsets, entry_id)
+    else:
+        return None
 
 
 @dataclass
@@ -274,22 +303,25 @@ create table if not exists body
             case _:
                 assert_never(row)
 
-    def get_body(self, path: Path) -> Chunk:
+    def get_body(self, path: Path) -> Chunk | None:
         cur = self.conn.cursor()
-        total, offsets = _metadata(cur, path)
+        if metadata := _metadata(cur, path):
+            total, offsets, entry_id = metadata
+            return Chunk(
+                data=SparseBuffer.from_db(cur, entry_id, *offsets).get_range(0, total),
+                total=total,
+            )
 
-        return Chunk(
-            data=SparseBuffer.from_db(cur, path, *offsets).get_range(0, total),
-            total=total,
-        )
-
-    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk:
+    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
         cur = self.conn.cursor()
-        total, offsets = _metadata(cur, path)
-        return Chunk(
-            data=SparseBuffer.from_db(cur, path, *offsets).get_range(start, end),
-            total=total,
-        )
+        if metadata := _metadata(cur, path):
+            total, offsets, entry_id = metadata
+            return Chunk(
+                data=SparseBuffer.from_db(cur, entry_id, *offsets).get_range(
+                    start, end
+                ),
+                total=total,
+            )
 
     @contextmanager
     def insertion(self, path: Path) -> Iterator[SqliteInsertion]:
