@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from logging import getLogger
 from typing import (
     Callable,
     ContextManager,
@@ -14,6 +15,8 @@ from typing import (
     assert_never,
 )
 from uuid import uuid4
+
+logger = getLogger()
 
 Bytes = bytes | bytearray
 Head = NewType("Head", bytes)
@@ -115,6 +118,7 @@ class SparseBuffer:
         if start_offset != end_offset:
             yield shift_out(self.chunks(end_offset), end=end - end_offset)
 
+        logger.debug("Sent %s", sent)
         assert sent == end - start, f"Sent {sent}, end={end}, start={start}"
 
     @classmethod
