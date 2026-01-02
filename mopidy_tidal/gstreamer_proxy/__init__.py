@@ -14,9 +14,7 @@ def mopidy_track_cache(path: Path) -> ProcessProxy:
             None,
             "https://lgf.audio.tidal.com/",
         ),
-        lambda: SQLiteCache(
-            sqlite3.connect(path, isolation_level=None, autocommit=False)
-        ),
+        lambda: SQLiteCache(sqlite3.connect(path)),
     )
     instance = ProcessProxy(proxy)
 
