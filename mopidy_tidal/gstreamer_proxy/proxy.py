@@ -204,13 +204,14 @@ class Proxy[C: Cache]:
         range = types.Range(None, None)
         raw_host = None
         async for line in local.lines():
-            if line.startswith(b"Host:"):
+            lower = line.lower()
+            if lower.startswith(b"host:"):
                 raw_host = line
                 continue
             raw_rest.extend(line)
-            if b"keep-alive" in line:
+            if b"keep-alive" in lower:
                 keep_alive = True
-            elif b"Range:" in line:
+            elif b"range:" in lower:
                 range = types.Range.parse_header(line)
             if line == b"\r\n":
                 break
