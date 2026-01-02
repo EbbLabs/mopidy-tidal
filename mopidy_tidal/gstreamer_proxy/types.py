@@ -81,22 +81,22 @@ class Buffer:
     contains: int
     _data: bytearray
 
-    # TODO make this constant size in ram?
     @classmethod
     def with_capacity(cls, capacity: int) -> Self:
-        _data = bytearray(capacity)
-        _data.clear()
-        return cls(capacity, 0, _data)
+        assert capacity
+        return cls(capacity, 0, bytearray(capacity))
 
-    def data(self) -> bytearray:
-        return self._data[: self.contains]
+    def data(self) -> memoryview:
+        return memoryview(self._data)[: self.contains]
 
     def clear(self) -> None:
         self.contains = 0
-        self._data.clear()
 
     def extend(self, data: bytes) -> None:
-        self.contains += len(data)
-        self._data.extend(data)
-        if self.contains > self.capacity:
-            self.capacity = len(self._data)
+        end = self.contains + len(data)
+        diff = end - self.capacity
+        if diff > 0:
+            self._data.extend(b"\x00" * diff * 2)
+            self.capacity = end
+        self._data[self.contains : end] = data
+        self.contains = end
