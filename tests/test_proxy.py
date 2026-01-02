@@ -433,6 +433,7 @@ class TestSQLiteCache:
         semaphore = asyncio.Semaphore(n_concurrent)
 
         async def insert(id: int):
+            nonlocal cache # needed for the linter
             async with semaphore:
                 with cache.insertion(Path(f"foo-{id}".encode())) as insertion:
                     await asyncio.sleep(0)
