@@ -2,7 +2,7 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from logging import getLogger
 from typing import (
@@ -340,10 +340,12 @@ create table if not exists body
 
             if insertion.final:
                 cur.execute(
-                    "UPDATE body SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
+                    "UPDATE body SET is_final=true WHERE entry_id=?",
+                    (insertion.entry_id,),
                 )
                 cur.execute(
-                    "UPDATE head SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
+                    "UPDATE head SET is_final=true WHERE entry_id=?",
+                    (insertion.entry_id,),
                 )
             else:
                 cur.execute("DELETE from head WHERE entry_id=?", (insertion.entry_id,))
