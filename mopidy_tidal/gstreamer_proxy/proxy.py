@@ -185,6 +185,7 @@ class Proxy[C: Cache]:
         server = await asyncio.start_server(
             self.handle_request, "127.0.0.1", self.config.port or 0
         )
+        self._server = server
         _, port = server.sockets[0].getsockname()
         self.cache.init()
         self.started = True
