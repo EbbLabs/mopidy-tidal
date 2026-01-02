@@ -2,7 +2,7 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from logging import getLogger
 from typing import (
@@ -332,16 +332,19 @@ create table if not exists body
 
     @contextmanager
     def insertion(self, path: Path) -> Iterator[SqliteInsertion]:
-        cur = self.conn.cursor()
-        insertion = SqliteInsertion(cur, path)
+        with self.conn as conn:
+            cur = conn.cursor()
 
-        yield insertion
+            insertion = SqliteInsertion(cur, path)
+            yield insertion
 
-        if insertion.final:
-            cur.execute(
-                "UPDATE body SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
-            )
-            cur.execute(
-                "UPDATE head SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
-            )
-            self.conn.commit()
+            if insertion.final:
+                cur.execute(
+                    "UPDATE body SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
+                )
+                cur.execute(
+                    "UPDATE head SET is_final=true WHERE entry_id=?", (insertion.entry_id,)
+                )
+            else:
+                cur.execute("DELETE from head WHERE entry_id=?", (insertion.entry_id,))
+                cur.execute("DELETE from body WHERE entry_id=?", (insertion.entry_id,))
