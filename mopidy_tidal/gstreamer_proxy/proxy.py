@@ -61,7 +61,8 @@ class Stream:
 
     @classmethod
     async def connect(cls, *args, **kwargs) -> Self:
-        rx, tx = await asyncio.open_connection(*args, **kwargs)
+        fut = asyncio.open_connection(*args, **kwargs)
+        rx, tx = await asyncio.wait_for(fut, 3.0)
         return cls(rx, tx)
 
     async def close(self):
