@@ -421,7 +421,75 @@ class TestCache:
 
 
 class TestSQLiteCache:
-    def test_incomplete_insertion_is_not_left_in_cache(self, tmp_path: pathlib.Path):
+    @parametrize("n_concurrent", [1, 2, 8, 24, 64, 128])
+    async def test_incomplete_insertion_do_not_prevent_complete_insertions_from_persisting_on_disk(
+        self, tmp_path: pathlib.Path, n_concurrent: int
+    ):
+        conn = sqlite3.connect(tmp_path / "foo.db")
+
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        semaphore = asyncio.Semaphore(n_concurrent)
+
+        async def insert(id: int):
+            async with semaphore:
+                with cache.insertion(Path(f"foo-{id}".encode())) as insertion:
+                    await asyncio.sleep(0)
+                    insertion.save_head(Head(f"head-{id}".encode()))
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"body", 0)
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"data", 4)
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(id.to_bytes(8), 8)
+                    await asyncio.sleep(0)
+                    if id == 4:
+                        insertion.finalise()
+
+        await asyncio.gather(*(insert(i) for i in range(128)))
+
+        del cache, conn
+
+        conn = sqlite3.connect(tmp_path / "foo.db")
+
+        assert conn.execute("select count(*) from head").fetchone()[0] == 1
+        assert conn.execute("select count(*) from body").fetchone()[0] == 3
+
+    @parametrize("n_concurrent", [1, 2, 8, 24, 64, 128])
+    async def test_incomplete_insertion_do_not_prevent_complete_insertions_from_persisting_on_the_conn(
+        self, tmp_path: pathlib.Path, n_concurrent: int
+    ):
+        conn = sqlite3.connect(tmp_path / "foo.db")
+
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        semaphore = asyncio.Semaphore(n_concurrent)
+
+        async def insert(id: int):
+            async with semaphore:
+                with cache.insertion(Path(f"foo-{id}".encode())) as insertion:
+                    await asyncio.sleep(0)
+                    insertion.save_head(Head(f"head-{id}".encode()))
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"body", 0)
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(b"data", 4)
+                    await asyncio.sleep(0)
+                    insertion.save_body_chunk(id.to_bytes(8), 8)
+                    await asyncio.sleep(0)
+                    if id == 4:
+                        insertion.finalise()
+
+        await asyncio.gather(*(insert(i) for i in range(128)))
+
+        assert conn.execute("select count(*) from head").fetchone()[0] == 1
+        assert conn.execute("select count(*) from body").fetchone()[0] == 3
+
+    async def test_incomplete_insertion_is_not_left_in_cache(
+        self, tmp_path: pathlib.Path
+    ):
         conn = sqlite3.connect(tmp_path / "foo.db")
 
         cache = SQLiteCache(conn)
@@ -441,8 +509,9 @@ class TestSQLiteCache:
         assert conn.execute("select count(*) from head").fetchone()[0] == 0
         assert conn.execute("select count(*) from body").fetchone()[0] == 0
 
-    def test_incomplete_insertion_is_not_visible_in_connection(
-        self, tmp_path: pathlib.Path
+    async def test_incomplete_insertion_is_not_visible_in_connection(
+        self,
+        tmp_path: pathlib.Path,
     ):
         conn = sqlite3.connect(tmp_path / "foo.db")
 
