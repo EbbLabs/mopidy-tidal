@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import pathlib
 import sqlite3
 import ssl
 from dataclasses import dataclass
@@ -417,3 +418,43 @@ class TestCache:
             body = b"".join(lookup.data)
             assert body[:8] == b"bodydata"
             assert int.from_bytes(body[8:]) == id
+
+
+class TestSQLiteCache:
+    def test_incomplete_insertion_is_not_left_in_cache(self, tmp_path: pathlib.Path):
+        conn = sqlite3.connect(tmp_path / "foo.db")
+
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        with cache.insertion(Path(b"foo")) as insertion:
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.save_body_chunk(b"data", 4)
+            assert conn.execute("select count(*) from head").fetchone()[0] == 1
+            assert conn.execute("select count(*) from body").fetchone()[0] == 2
+
+        del cache, conn
+
+        conn = sqlite3.connect(tmp_path / "foo.db")
+
+        assert conn.execute("select count(*) from head").fetchone()[0] == 0
+        assert conn.execute("select count(*) from body").fetchone()[0] == 0
+
+    def test_incomplete_insertion_is_not_visible_in_connection(
+        self, tmp_path: pathlib.Path
+    ):
+        conn = sqlite3.connect(tmp_path / "foo.db")
+
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        with cache.insertion(Path(b"foo")) as insertion:
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.save_body_chunk(b"data", 4)
+            assert conn.execute("select count(*) from head").fetchone()[0] == 1
+            assert conn.execute("select count(*) from body").fetchone()[0] == 2
+
+        assert conn.execute("select count(*) from head").fetchone()[0] == 0
+        assert conn.execute("select count(*) from body").fetchone()[0] == 0
