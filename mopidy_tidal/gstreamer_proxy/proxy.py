@@ -71,11 +71,6 @@ class Stream:
         self.tx.close()
 
 
-@dataclass
-class Connection:
-    stream: Stream
-    path: bytes
-
 
 @dataclass
 class Request:
