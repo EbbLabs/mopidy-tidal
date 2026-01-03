@@ -291,6 +291,7 @@ create table if not exists body
    , len integer
    , timestamp timestamp default CURRENT_TIMESTAMP
    , last_used timestamp default CURRENT_TIMESTAMP
+   , FOREIGN KEY(entry_id) REFERENCES head(entry_id)
 );
             """)
             conn.execute("create index if not exists head_idx on head (path);")
