@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import json
 import pathlib
 import sqlite3
 import ssl
@@ -528,3 +529,15 @@ class TestSQLiteCache:
 
         assert conn.execute("select count(*) from head").fetchone()[0] == 0
         assert conn.execute("select count(*) from body").fetchone()[0] == 0
+
+    async def test_database_is_versioned(self):
+        conn = sqlite3.connect(":memory:")
+
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        version = conn.execute("select schema_version from metadata").fetchone()[0]
+        extra = conn.execute("select extra from metadata").fetchone()[0]
+
+        assert version == "v0.1.0"
+        json.loads(extra)
