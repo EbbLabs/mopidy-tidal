@@ -5,6 +5,7 @@ import pathlib
 import sqlite3
 import ssl
 from dataclasses import dataclass
+from time import sleep
 from typing import Iterator, NamedTuple
 
 import httpx
@@ -541,3 +542,25 @@ class TestSQLiteCache:
 
         assert version == "v0.1.0"
         json.loads(extra)
+
+    def test_head_access_updates_last_used(self):
+        conn = sqlite3.connect(":memory:")
+
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        with cache.insertion(Path(b"foo")) as insertion:
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.finalise()
+
+        # time is stored with 1s precision, so force it to advance.
+        sleep(2)
+        last_used = conn.execute("select last_used from head").fetchone()[0]
+
+        cache.get_head(Path(b"foo"))
+
+        last_used2 = conn.execute("select last_used from head").fetchone()[0]
+
+        assert last_used2 != last_used
+        assert last_used2 - last_used == pytest.approx(2, rel=0.5)
