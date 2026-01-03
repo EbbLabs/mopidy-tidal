@@ -564,3 +564,73 @@ class TestSQLiteCache:
 
         assert last_used2 != last_used
         assert last_used2 - last_used == pytest.approx(2, rel=0.5)
+
+    def test_maintains_max_size_when_size_declared(self):
+        conn = sqlite3.connect(":memory:")
+
+        cache = SQLiteCache(conn, 3)
+        cache.init()
+
+        for i in range(4):
+            with cache.insertion(Path(f"foo-{i}".encode())) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+                insertion.finalise()
+
+        assert conn.execute("select count(*) from head").fetchone()[0] == 3
+
+    def test_prefers_newest_record_by_insertion_time_when_nothing_has_been_accessed(
+        self,
+    ):
+        conn = sqlite3.connect(":memory:")
+
+        cache = SQLiteCache(conn, 3)
+        cache.init()
+
+        keys = [Path(f"foo-{i}".encode()) for i in range(4)]
+
+        for key in keys:
+            with cache.insertion(key) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+                insertion.finalise()
+
+        assert conn.execute("select count(*) from head").fetchone()[0] == 3
+
+        assert not cache.get_head(keys[0])
+        assert cache.get_head(keys[1])
+        assert cache.get_head(keys[2])
+        assert cache.get_head(keys[3])
+
+    def test_prefers_newest_record_by_access_time_then_creation_time(
+        self,
+    ):
+        conn = sqlite3.connect(":memory:")
+
+        cache = SQLiteCache(conn, 3)
+        cache.init()
+
+        keys = [Path(f"foo-{i}".encode()) for i in range(4)]
+
+        for key in keys[:3]:
+            with cache.insertion(key) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+                insertion.finalise()
+
+        sleep(1)
+        # keys[0] is now the newest record
+        cache.get_head(keys[0])
+
+        for key in keys[3:]:
+            with cache.insertion(key) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+                insertion.finalise()
+
+        assert conn.execute("select count(*) from head").fetchone()[0] == 3
+
+        assert cache.get_head(keys[0])
+        assert not cache.get_head(keys[1])  # never accessed, aged out
+        assert cache.get_head(keys[2])
+        assert cache.get_head(keys[3])
