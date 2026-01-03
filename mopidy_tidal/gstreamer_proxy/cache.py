@@ -312,6 +312,9 @@ create table if not exists metadata
                     ("v0.1.0", "{}"),
                 )
 
+            conn.execute("DELETE FROM head WHERE NOT is_final;")
+            conn.execute("DELETE FROM body WHERE NOT is_final;")
+
     def get_head(self, path: Path) -> Head | None:
         with self.conn as conn:
             row = conn.execute(
