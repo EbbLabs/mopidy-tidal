@@ -230,13 +230,10 @@ class Metadata(NamedTuple):
 def _metadata(cur: sqlite3.Cursor, path: Path) -> Metadata | None:
     cur.execute(
         """
-WITH entries AS (
-  SELECT DISTINCT
-    entry_id
-  FROM
-    body
-  WHERE
-    is_final AND path=?
+WITH target AS (
+  SELECT entry_id FROM head
+  WHERE path=? AND is_final
+  ORDER BY last_used DESC
   LIMIT 1
 )
 SELECT
@@ -244,7 +241,8 @@ SELECT
   , len
   , body.entry_id
 FROM body
-JOIN entries ON body.entry_id=entries.entry_id
+JOIN target ON target.entry_id=body.entry_id
+ORDER BY start ASC
     """,
         (path,),
     )
@@ -275,8 +273,8 @@ create table if not exists head
    , is_final integer default false
    , path varchar
    , data blob
-   , timestamp timestamp default CURRENT_TIMESTAMP
-   , last_used timestamp default CURRENT_TIMESTAMP
+   , timestamp integer default (unixepoch('now'))
+   , last_used integer default (unixepoch('now'))
 );
             """)
             conn.execute("""
@@ -289,8 +287,7 @@ create table if not exists body
    , start integer
    , data blob
    , len integer
-   , timestamp timestamp default CURRENT_TIMESTAMP
-   , last_used timestamp default CURRENT_TIMESTAMP
+   , timestamp integer default (unixepoch('now'))
    , FOREIGN KEY(entry_id) REFERENCES head(entry_id)
 );
             """)
@@ -317,9 +314,22 @@ create table if not exists metadata
                     )
 
     def get_head(self, path: Path) -> Head | None:
-        row = self.conn.execute(
-            "SELECT data FROM head WHERE path=? AND is_final LIMIT 1", (path,)
-        ).fetchone()
+        with self.conn as conn:
+            row = conn.execute(
+                """
+WITH target AS (
+  SELECT id FROM head
+  WHERE path=? AND is_final
+  ORDER BY last_used DESC
+  LIMIT 1
+)
+UPDATE head
+SET last_used=unixepoch('now')
+WHERE id in (SELECT id FROM target)
+RETURNING data
+            """,
+                (path,),
+            ).fetchone()
         match row:
             case [head]:
                 return Head(head)
