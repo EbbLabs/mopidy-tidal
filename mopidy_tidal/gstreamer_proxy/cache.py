@@ -294,8 +294,13 @@ create table if not exists body
    , FOREIGN KEY(entry_id) REFERENCES head(entry_id)
 );
             """)
-            conn.execute("create index if not exists head_idx on head (path);")
-            conn.execute("create index if not exists body_idx on body (path);")
+            conn.execute("create index if not exists head_path_idx on head (path);")
+            conn.execute(
+                "create index if not exists head_entry_idx on head (entry_id);"
+            )
+            conn.execute(
+                "create index if not exists body_entry_idx on body (entry_id);"
+            )
 
     def get_head(self, path: Path) -> Head | None:
         row = self.conn.execute(
