@@ -35,12 +35,15 @@ something is supposed to work is probably to have a look at the tests.
 
 
 ### Code Style
-Code should be formatted with `isort` and `black`:
+Code should be formatted with `ruff`:
 
 ```bash
-isort --profile=black mopidy_tidal tests
-black mopidy_tidal tests
+ruff format
 ```
+
+Additionally, run `ruff check` and clean up or `#noqa` its suggestions.  You may
+want to use `ruff check --fix`, potentially after staging so you can see the
+difference.
 
 if you are on *nix you can run:
 

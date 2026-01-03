@@ -2,7 +2,9 @@ from __future__ import unicode_literals
 
 from typing import TYPE_CHECKING
 
+import tidalapi
 from login_hack import speak_login_hack
+from tidalapi.exceptions import URLNotAvailable
 
 if TYPE_CHECKING:  # pragma: no cover
     from mopidy_tidal.backend import TidalBackend
@@ -19,15 +21,50 @@ from . import Extension, context
 logger = logging.getLogger(__name__)
 
 
+def as_stream(track: tidalapi.Track) -> str:
+    stream = track.get_stream()
+    manifest = stream.get_stream_manifest()
+    logger.info("MimeType:{}".format(stream.manifest_mime_type))
+    logger.info(
+        "Starting playback of track:{}, (quality:{}, codec:{}, {}bit/{}Hz)".format(
+            track.id,
+            stream.audio_quality,
+            manifest.get_codecs(),
+            stream.bit_depth,
+            stream.sample_rate,
+        )
+    )
+
+    if stream.manifest_mime_type == ManifestMimeType.MPD:
+        data = stream.get_manifest_data()
+        if data:
+            mpd_path = Path(
+                Extension.get_cache_dir(context.get_config()), "manifest.mpd"
+            )
+            with open(mpd_path, "w") as file:
+                file.write(data)
+
+            return "file://{}".format(mpd_path)
+        else:
+            raise AttributeError("No MPD manifest available!")
+    elif stream.manifest_mime_type == ManifestMimeType.BTS:
+        urls = manifest.get_urls()
+        if isinstance(urls, list):
+            return urls[0]
+        else:
+            return urls
+
+
 class TidalPlaybackProvider(backend.PlaybackProvider):
     backend: "TidalBackend"
 
     @speak_login_hack
-    def translate_uri(self, uri):
+    def translate_uri(self, uri) -> str:
         logger.info("TIDAL uri: %s", uri)
         parts = uri.split(":")
-        track_id = int(parts[4])
+        track_id = parts[4]
         session = self.backend.session
+        assert session
         if session.config.quality == Quality.hi_res_lossless:
             if "HIRES_LOSSLESS" in session.track(track_id).media_metadata_tags:
                 logger.info("Playback quality: %s", session.config.quality)
@@ -37,34 +74,14 @@ class TidalPlaybackProvider(backend.PlaybackProvider):
                     "LOSSLESS",
                 )
 
-        stream = session.track(track_id).get_stream()
-        manifest = stream.get_stream_manifest()
-        logger.info("MimeType:{}".format(stream.manifest_mime_type))
-        logger.info(
-            "Starting playback of track:{}, (quality:{}, codec:{}, {}bit/{}Hz)".format(
-                track_id,
-                stream.audio_quality,
-                manifest.get_codecs(),
-                stream.bit_depth,
-                stream.sample_rate,
-            )
-        )
-
-        if stream.manifest_mime_type == ManifestMimeType.MPD:
-            data = stream.get_manifest_data()
-            if data:
-                mpd_path = Path(
-                    Extension.get_cache_dir(context.get_config()), "manifest.mpd"
+        track = session.track(track_id)
+        if proxy := self.backend.track_cache:
+            try:
+                url = track.get_url()
+            except URLNotAvailable:
+                logger.info(
+                    "No direct url available for %s, falling back to stream", track.id
                 )
-                with open(mpd_path, "w") as file:
-                    file.write(data)
-
-                return "file://{}".format(mpd_path)
             else:
-                raise AttributeError("No MPD manifest available!")
-        elif stream.manifest_mime_type == ManifestMimeType.BTS:
-            urls = manifest.get_urls()
-            if isinstance(urls, list):
-                return urls[0]
-            else:
-                return urls
+                return proxy.config.local_url(url)
+        return as_stream(track)

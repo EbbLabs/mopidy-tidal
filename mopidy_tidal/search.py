@@ -92,7 +92,7 @@ fields_meta = {
 
 
 def _get_flattened_query_and_field_meta(
-    query: Mapping[str, str]
+    query: Mapping[str, str],
 ) -> Tuple[str, SearchFieldMeta]:
     q = " ".join(
         query[field]
