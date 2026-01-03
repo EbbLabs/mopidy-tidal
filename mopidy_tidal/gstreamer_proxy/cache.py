@@ -294,6 +294,14 @@ create table if not exists body
    , FOREIGN KEY(entry_id) REFERENCES head(entry_id)
 );
             """)
+            conn.execute("""
+create table if not exists metadata
+(
+   id integer primary key autoincrement
+   , schema_version varchar not null
+   , extra varchar
+);
+            """)
             conn.execute("create index if not exists head_path_idx on head (path);")
             conn.execute(
                 "create index if not exists head_entry_idx on head (entry_id);"
@@ -301,6 +309,12 @@ create table if not exists body
             conn.execute(
                 "create index if not exists body_entry_idx on body (entry_id);"
             )
+            with conn as c:
+                if not c.execute("select count(*) from metadata").fetchone()[0]:
+                    c.execute(
+                        "insert into metadata (schema_version, extra) values (?, ?)",
+                        ("v0.1.0", "{}"),
+                    )
 
     def get_head(self, path: Path) -> Head | None:
         row = self.conn.execute(
