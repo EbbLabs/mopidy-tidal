@@ -266,49 +266,49 @@ class SQLiteCache(Cache[SqliteInsertion]):
     def init(self) -> None:
         with self.conn as conn:
             conn.execute("""
-create table if not exists head
+CREATE TABLE IF NOT EXISTS head
 (
-   id integer primary key autoincrement
-   , entry_id blob
-   , is_final integer default false
-   , path varchar
-   , data blob
-   , timestamp integer default (unixepoch('now'))
-   , last_used integer default (unixepoch('now'))
+   id INTEGER PRIMARY KEY AUTOINCREMENT
+   , entry_id BLOB
+   , is_final INTEGER DEFAULT FALSE
+   , path VARCHAR
+   , data BLOB
+   , timestamp INTEGER DEFAULT (unixepoch('now'))
+   , last_used INTEGER DEFAULT (unixepoch('now'))
 );
             """)
             conn.execute("""
-create table if not exists body
+CREATE TABLE IF NOT EXISTS body
 (
-   id integer primary key autoincrement
-   , entry_id blob
-   , is_final integer default false
-   , path varchar
-   , start integer
-   , data blob
-   , len integer
-   , timestamp integer default (unixepoch('now'))
-   , FOREIGN KEY(entry_id) REFERENCES head(entry_id)
+   id INTEGER PRIMARY KEY AUTOINCREMENT
+   , entry_id BLOB
+   , is_final INTEGER DEFAULT FALSE
+   , path VARCHAR
+   , start INTEGER
+   , data BLOB
+   , len INTEGER
+   , timestamp INTEGER DEFAULT (unixepoch('now'))
+   , FOREIGN KEY(entry_id) REFERENCES head(entry_id) ON DELETE CASCADE
 );
             """)
             conn.execute("""
-create table if not exists metadata
+CREATE TABLE IF NOT EXISTS metadata
 (
-   id integer primary key autoincrement
-   , schema_version varchar not null
-   , extra varchar
+   id INTEGER PRIMARY KEY AUTOINCREMENT
+   , schema_version VARCHAR NOT NULL
+   , extra VARCHAR
 );
             """)
-            conn.execute("create index if not exists head_path_idx on head (path);")
+            conn.execute("CREATE INDEX IF NOT EXISTS head_path_idx ON head (path);")
             conn.execute(
-                "create index if not exists head_entry_idx on head (entry_id);"
+                "CREATE INDEX IF NOT EXISTS HEAD_ENTRY_IDX ON head (entry_id);"
             )
             conn.execute(
-                "create index if not exists body_entry_idx on body (entry_id);"
+                "CREATE INDEX IF NOT EXISTS BODY_ENTRY_IDX ON body (entry_id);"
             )
-            if not conn.execute("select count(*) from metadata").fetchone()[0]:
+            if not conn.execute("SELECT count(*) FROM metadata").fetchone()[0]:
                 conn.execute(
-                    "insert into metadata (schema_version, extra) values (?, ?)",
+                    "INSERT INTO metadata (schema_version, extra) VALUES (?, ?)",
                     ("v0.1.0", "{}"),
                 )
 
