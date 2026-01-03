@@ -262,6 +262,7 @@ ORDER BY start ASC
 @dataclass
 class SQLiteCache(Cache[SqliteInsertion]):
     conn: sqlite3.Connection
+    max_entries: int | None = None
 
     def init(self) -> None:
         with self.conn as conn:
@@ -314,6 +315,21 @@ CREATE TABLE IF NOT EXISTS metadata
 
             conn.execute("DELETE FROM head WHERE NOT is_final;")
             conn.execute("DELETE FROM body WHERE NOT is_final;")
+
+    def evict(self) -> None:
+        if max_entries := self.max_entries:
+            with self.conn as conn:
+                conn.execute(
+                    """
+DELETE FROM head
+WHERE id NOT IN (
+  SELECT id FROM head
+  ORDER BY last_used DESC, id DESC
+  LIMIT ?
+)
+                """,
+                    (max_entries,),
+                )
 
     def get_head(self, path: Path) -> Head | None:
         with self.conn as conn:
@@ -379,6 +395,7 @@ RETURNING data
                     "UPDATE head SET is_final=true WHERE entry_id=?",
                     (insertion.entry_id,),
                 )
+                self.evict()
             else:
                 cur.execute("DELETE from head WHERE entry_id=?", (insertion.entry_id,))
                 cur.execute("DELETE from body WHERE entry_id=?", (insertion.entry_id,))
