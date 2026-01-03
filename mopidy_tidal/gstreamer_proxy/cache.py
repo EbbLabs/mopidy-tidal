@@ -306,12 +306,11 @@ create table if not exists metadata
             conn.execute(
                 "create index if not exists body_entry_idx on body (entry_id);"
             )
-            with conn as c:
-                if not c.execute("select count(*) from metadata").fetchone()[0]:
-                    c.execute(
-                        "insert into metadata (schema_version, extra) values (?, ?)",
-                        ("v0.1.0", "{}"),
-                    )
+            if not conn.execute("select count(*) from metadata").fetchone()[0]:
+                conn.execute(
+                    "insert into metadata (schema_version, extra) values (?, ?)",
+                    ("v0.1.0", "{}"),
+                )
 
     def get_head(self, path: Path) -> Head | None:
         with self.conn as conn:
