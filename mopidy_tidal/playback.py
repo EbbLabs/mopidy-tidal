@@ -83,7 +83,7 @@ class TidalPlaybackProvider(backend.PlaybackProvider):
             else:
                 logger.info(
                     "No HIRES_LOSSLESS available for this track; Using playback quality LOSSLESS",
-            )
+                )
         return track
 
     @speak_login_hack

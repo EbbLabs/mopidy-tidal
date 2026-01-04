@@ -24,6 +24,7 @@ Path = NewType("Path", bytes)
 TidalID = NewType("TidalID", str)
 EntryID = NewType("EntryID", bytes)
 
+
 class Entry(NamedTuple):
     path: Path
     entry_id: EntryID
@@ -75,6 +76,7 @@ class Cache[I: Insertion](ABC):
 @dataclass
 class ChunkedBuffer:
     """A lazily resolved buffer over discrete chunks of data."""
+
     offsets: Sequence[int]
     chunks: Callable[[int], Bytes]
 
@@ -335,9 +337,7 @@ CREATE TABLE IF NOT EXISTS path
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS body_entry_idx ON body (entry_id);"
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS path_id_idx ON path (tidal_id);"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS path_id_idx ON path (tidal_id);")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS path_entry_idx ON path (entry_id);"
             )
@@ -431,7 +431,8 @@ RETURNING data
                 )
                 with suppress(sqlite3.OperationalError):
                     cur.execute(
-                        "UPDATE path SET entry_id=? WHERE path=?", (insertion.entry_id, path)
+                        "UPDATE path SET entry_id=? WHERE path=?",
+                        (insertion.entry_id, path),
                     )
                 self.evict()
             else:
@@ -439,7 +440,9 @@ RETURNING data
                 cur.execute("DELETE from body WHERE entry_id=?", (insertion.entry_id,))
 
     def lookup_path(self, id: TidalID) -> Path | None:
-        match self.conn.execute("SELECT path FROM path WHERE tidal_id=? LIMIT 1", (id,)).fetchone():
+        match self.conn.execute(
+            "SELECT path FROM path WHERE tidal_id=? LIMIT 1", (id,)
+        ).fetchone():
             case (path,):
                 return Path(path)
             case _:
@@ -450,14 +453,17 @@ RETURNING data
             conn.execute("INSERT INTO path (tidal_id, path) VALUES (?, ?)", (id, path))
 
     def lookup_entry(self, id: TidalID) -> Entry | None:
-        res = self.conn.execute("""
+        res = self.conn.execute(
+            """
 SELECT
   path.path
   , head.entry_id
 FROM path
 JOIN head on path.entry_id = head.entry_id
 WHERE path.tidal_id = ? AND head.is_final
-        """, (id,)).fetchone()
+        """,
+            (id,),
+        ).fetchone()
         match res:
             case (path, entry_id):
                 return Entry(path, entry_id)
