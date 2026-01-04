@@ -157,7 +157,15 @@ class DictInsertion(Insertion):
 
 
 class DictCache(Cache[DictInsertion]):
-    """A cache using dicts to store the data."""
+    """A cache using dicts to store the data.
+
+    This is not used at the moment, but was used to bootstrap up the cache in
+    development. Once it was stable the SQLite cache below was written to
+    replace it.
+
+    We could get rid of it, but maybe we should keep it until we're sure the
+    cache works in production.
+    """
 
     def __init__(self) -> None:
         self.heads = {}
@@ -184,7 +192,6 @@ class DictCache(Cache[DictInsertion]):
         else:
             return None
 
-    # TODO test this actually drops correctly
     @contextmanager
     def insertion(self, path: Path) -> Iterator[DictInsertion]:
         insertion = DictInsertion()
