@@ -331,6 +331,9 @@ CREATE TABLE IF NOT EXISTS path
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS path_id_idx ON path (tidal_id);"
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS path_entry_idx ON path (entry_id);"
+            )
             if not conn.execute("SELECT count(*) FROM metadata").fetchone()[0]:
                 conn.execute(
                     "INSERT INTO metadata (schema_version, extra) VALUES (?, ?)",
