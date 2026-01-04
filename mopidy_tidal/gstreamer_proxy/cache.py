@@ -281,6 +281,7 @@ CREATE TABLE IF NOT EXISTS head
    id          INTEGER PRIMARY KEY AUTOINCREMENT
    , entry_id  BLOB    NOT NULL
    , is_final  INTEGER NOT NULL DEFAULT FALSE
+   , manual    INTEGER NOT NULL DEFAULT FALSE
    , path      VARCHAR NOT NULL
    , data      BLOB    NOT NULL
    , timestamp INTEGER NOT NULL DEFAULT (unixepoch('now'))
@@ -333,6 +334,7 @@ CREATE TABLE IF NOT EXISTS metadata
 DELETE FROM head
 WHERE id NOT IN (
   SELECT id FROM head
+  WHERE not manual
   ORDER BY last_used DESC, id DESC
   LIMIT ?
 )
