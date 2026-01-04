@@ -310,12 +310,25 @@ CREATE TABLE IF NOT EXISTS metadata
    , extra          VARCHAR NOT NULL
 );
             """)
+            conn.execute("""
+CREATE TABLE IF NOT EXISTS path
+(
+   id               INTEGER PRIMARY KEY AUTOINCREMENT
+   , tidal_id       VARCHAR NOT NULL
+   , path           VARCHAR NOT NULL
+   , entry_id       BLOB                               -- Note nullable
+   , FOREIGN KEY(entry_id) REFERENCES head(entry_id) ON DELETE CASCADE
+);
+            """)
             conn.execute("CREATE INDEX IF NOT EXISTS head_path_idx ON head (path);")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS HEAD_ENTRY_IDX ON head (entry_id);"
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS BODY_ENTRY_IDX ON body (entry_id);"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS PATH_ID_IDX ON path (tidal_id);"
             )
             if not conn.execute("SELECT count(*) FROM metadata").fetchone()[0]:
                 conn.execute(
