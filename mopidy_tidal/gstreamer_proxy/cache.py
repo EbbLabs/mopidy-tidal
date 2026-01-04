@@ -322,13 +322,13 @@ CREATE TABLE IF NOT EXISTS path
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS head_path_idx ON head (path);")
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS HEAD_ENTRY_IDX ON head (entry_id);"
+                "CREATE INDEX IF NOT EXISTS head_entry_idx ON head (entry_id);"
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS BODY_ENTRY_IDX ON body (entry_id);"
+                "CREATE INDEX IF NOT EXISTS body_entry_idx ON body (entry_id);"
             )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS PATH_ID_IDX ON path (tidal_id);"
+                "CREATE INDEX IF NOT EXISTS path_id_idx ON path (tidal_id);"
             )
             if not conn.execute("SELECT count(*) FROM metadata").fetchone()[0]:
                 conn.execute(
