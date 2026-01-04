@@ -636,6 +636,7 @@ class TestSQLiteCache:
         assert cache.get_head(keys[2])
         assert cache.get_head(keys[3])
 
+
 class TestPathCache:
     def test_an_empty_cache_has_no_paths_in_it(self):
         conn = sqlite3.connect(":memory:")
@@ -670,10 +671,10 @@ class TestPathCache:
 
         cache.insert_path(TidalID("tidal:track:0:0:0"), path)
         with cache.insertion(path) as insertion:
-                insertion.save_head(Head(b"head"))
-                insertion.save_body_chunk(b"body", 0)
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
 
-                assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
+            assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
         assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
 
     def test_an_entry_exists_for_an_id_we_have_fetched(self):
@@ -684,9 +685,9 @@ class TestPathCache:
 
         cache.insert_path(TidalID("tidal:track:0:0:0"), path)
         with cache.insertion(path) as insertion:
-                insertion.save_head(Head(b"head"))
-                insertion.save_body_chunk(b"body", 0)
-                insertion.finalise()
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.finalise()
 
         entry = cache.lookup_entry(TidalID("tidal:track:0:0:0"))
 
@@ -702,16 +703,16 @@ class TestPathCache:
 
         cache.insert_path(TidalID("tidal:track:0:0:0"), path)
         with cache.insertion(path) as insertion:
-                insertion.save_head(Head(b"head"))
-                insertion.save_body_chunk(b"body", 0)
-                insertion.finalise()
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.finalise()
 
         assert cache.lookup_entry(TidalID("tidal:track:0:0:0"))
 
         with cache.insertion(Path("/bar/baz")) as insertion:
-                insertion.save_head(Head(b"head"))
-                insertion.save_body_chunk(b"body", 0)
-                insertion.finalise()
+            insertion.save_head(Head(b"head"))
+            insertion.save_body_chunk(b"body", 0)
+            insertion.finalise()
 
         assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
         # cascade delete will remove path cache entries where we don't have any data but used to
