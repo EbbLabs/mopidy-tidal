@@ -280,7 +280,7 @@ class SQLiteCache(Cache[SQLiteInsertion]):
 CREATE TABLE IF NOT EXISTS head
 (
    id          INTEGER PRIMARY KEY AUTOINCREMENT
-   , entry_id  BLOB    NOT NULL
+   , entry_id  BLOB    NOT NULL UNIQUE
    , is_final  INTEGER NOT NULL DEFAULT FALSE
    , manual    INTEGER NOT NULL DEFAULT FALSE
    , path      VARCHAR NOT NULL
