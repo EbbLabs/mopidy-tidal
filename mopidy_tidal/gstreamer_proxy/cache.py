@@ -278,35 +278,35 @@ class SQLiteCache(Cache[SQLiteInsertion]):
             conn.execute("""
 CREATE TABLE IF NOT EXISTS head
 (
-   id INTEGER PRIMARY KEY AUTOINCREMENT
-   , entry_id BLOB
-   , is_final INTEGER DEFAULT FALSE
-   , path VARCHAR
-   , data BLOB
-   , timestamp INTEGER DEFAULT (unixepoch('now'))
-   , last_used INTEGER DEFAULT (unixepoch('now'))
+   id          INTEGER PRIMARY KEY AUTOINCREMENT
+   , entry_id  BLOB    NOT NULL
+   , is_final  INTEGER NOT NULL DEFAULT FALSE
+   , path      VARCHAR NOT NULL
+   , data      BLOB    NOT NULL
+   , timestamp INTEGER NOT NULL DEFAULT (unixepoch('now'))
+   , last_used INTEGER NOT NULL DEFAULT (unixepoch('now'))
 );
             """)
             conn.execute("""
 CREATE TABLE IF NOT EXISTS body
 (
-   id INTEGER PRIMARY KEY AUTOINCREMENT
-   , entry_id BLOB
-   , is_final INTEGER DEFAULT FALSE
-   , path VARCHAR
-   , start INTEGER
-   , data BLOB
-   , len INTEGER
-   , timestamp INTEGER DEFAULT (unixepoch('now'))
+   id          INTEGER PRIMARY KEY AUTOINCREMENT
+   , entry_id  BLOB    NOT NULL
+   , is_final  INTEGER NOT NULL DEFAULT FALSE
+   , path      VARCHAR NOT NULL
+   , start     INTEGER NOT NULL
+   , data      BLOB    NOT NULL
+   , len       INTEGER NOT NULL
+   , timestamp INTEGER NOT NULL DEFAULT (unixepoch('now'))
    , FOREIGN KEY(entry_id) REFERENCES head(entry_id) ON DELETE CASCADE
 );
             """)
             conn.execute("""
 CREATE TABLE IF NOT EXISTS metadata
 (
-   id INTEGER PRIMARY KEY AUTOINCREMENT
+   id               INTEGER PRIMARY KEY AUTOINCREMENT
    , schema_version VARCHAR NOT NULL
-   , extra VARCHAR
+   , extra          VARCHAR NOT NULL
 );
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS head_path_idx ON head (path);")
