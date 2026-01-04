@@ -13,7 +13,7 @@ from tidalapi import __version__ as tidalapi_ver
 
 from mopidy_tidal import Extension, context, library, playback, playlists
 from mopidy_tidal import __version__ as mopidy_tidal_ver
-from mopidy_tidal.gstreamer_proxy import ProcessProxy, mopidy_track_cache
+from mopidy_tidal.gstreamer_proxy import ThreadedProxy, mopidy_track_cache
 from mopidy_tidal.web_auth_server import WebAuthServer
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
         self.login_server_port: int = 8989
 
     @property
-    def track_cache(self) -> ProcessProxy | None:
+    def track_cache(self) -> ThreadedProxy | None:
         path = (
             Path(
                 self._tidal_config["track_cache"]
