@@ -208,7 +208,7 @@ def entry_id() -> EntryID:
 
 
 @dataclass
-class SqliteInsertion(Insertion):
+class SQLiteInsertion(Insertion):
     cur: sqlite3.Cursor
     path: Path
     final: bool = False
@@ -269,7 +269,7 @@ ORDER BY start ASC
 
 
 @dataclass
-class SQLiteCache(Cache[SqliteInsertion]):
+class SQLiteCache(Cache[SQLiteInsertion]):
     conn: sqlite3.Connection
     max_entries: int | None = None
 
@@ -388,11 +388,11 @@ RETURNING data
             )
 
     @contextmanager
-    def insertion(self, path: Path) -> Iterator[SqliteInsertion]:
+    def insertion(self, path: Path) -> Iterator[SQLiteInsertion]:
         with self.conn as conn:
             cur = conn.cursor()
 
-            insertion = SqliteInsertion(cur, path)
+            insertion = SQLiteInsertion(cur, path)
             yield insertion
 
             if insertion.final:
