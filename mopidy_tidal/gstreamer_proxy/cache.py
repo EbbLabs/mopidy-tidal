@@ -278,9 +278,11 @@ class SQLiteCache(Cache[SQLiteInsertion]):
     conn: sqlite3.Connection
     max_entries: int | None = None
 
+    def __post_init__(self) -> None:
+        self.conn.execute("PRAGMA foreign_keys = ON")
+
     def init(self) -> None:
         with self.conn as conn:
-            conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("""
 CREATE TABLE IF NOT EXISTS head
 (
