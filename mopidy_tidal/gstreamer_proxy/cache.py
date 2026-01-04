@@ -68,11 +68,13 @@ class Cache[I: Insertion](ABC):
 
 
 @dataclass
-class SparseBuffer:
+class ChunkedBuffer:
+    """A lazily resolved buffer over discrete chunks of data."""
     offsets: Sequence[int]
     chunks: Callable[[int], Bytes]
 
     def get_range(self, start: int, end: int) -> Iterator[Bytes]:
+        """Get a (half closed) range from the backing data."""
         end += 1  # http uses closed ranges
         offsets = sorted(self.offsets)
 
@@ -167,7 +169,7 @@ class DictCache(Cache[DictInsertion]):
     def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
         chunks = self.bodies[path]
         if chunks:
-            data = SparseBuffer.from_dict(chunks).get_range(start, end)
+            data = ChunkedBuffer.from_dict(chunks).get_range(start, end)
             total = sum(len(x) for x in chunks.values())
             return Chunk(data, total)
         else:
@@ -361,7 +363,7 @@ RETURNING data
         if metadata := _metadata(cur, path):
             total, offsets, entry_id = metadata
             return Chunk(
-                data=SparseBuffer.from_db(cur, entry_id, *offsets).get_range(
+                data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
                     0, total - 1
                 ),
                 total=total,
@@ -372,7 +374,7 @@ RETURNING data
         if metadata := _metadata(cur, path):
             total, offsets, entry_id = metadata
             return Chunk(
-                data=SparseBuffer.from_db(cur, entry_id, *offsets).get_range(
+                data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
                     start, end
                 ),
                 total=total,
