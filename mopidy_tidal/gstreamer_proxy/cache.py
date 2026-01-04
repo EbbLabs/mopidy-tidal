@@ -341,7 +341,6 @@ CREATE TABLE IF NOT EXISTS path
                 )
 
             conn.execute("DELETE FROM head WHERE NOT is_final;")
-            conn.execute("DELETE FROM body WHERE NOT is_final;")
 
     def evict(self) -> None:
         if max_entries := self.max_entries:
