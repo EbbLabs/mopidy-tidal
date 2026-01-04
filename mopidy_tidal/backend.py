@@ -11,9 +11,9 @@ from pykka import ThreadingActor
 from tidalapi import Config, Session
 from tidalapi import __version__ as tidalapi_ver
 
-from mopidy_tidal import Extension
+from mopidy_tidal import Extension, context, library, playback, playlists
 from mopidy_tidal import __version__ as mopidy_tidal_ver
-from mopidy_tidal import context, library, playback, playlists
+from mopidy_tidal.gstreamer_proxy import ThreadedProxy, mopidy_track_cache
 from mopidy_tidal.web_auth_server import WebAuthServer
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,20 @@ class TidalBackend(ThreadingActor, backend.Backend):
         self.pkce_enabled: bool = False
         # login_server_port: Port to use for login HTTP server, eg. <host_ip>:<port>. Default <host_ip>:8989
         self.login_server_port: int = 8989
+
+    @property
+    def track_cache(self) -> ThreadedProxy | None:
+        path = (
+            Path(
+                self._tidal_config["track_cache"]
+                and Extension.get_cache_dir(self._config)
+            )
+            / "track.db"
+        )
+        if path:
+            return mopidy_track_cache(path)
+        else:
+            return None
 
     @property
     def session(self):
@@ -191,7 +205,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
                 # Parse and set tokens.
                 self._active_session.process_auth_token(json, is_pkce_token=True)
                 self._logged_in = True
-            except:
+            except Exception:
                 raise ValueError("Response code is required for PKCE login!")
         # Store session after auth completion
         self._complete_login()
@@ -231,3 +245,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
                     login_url, self.login_server_port, self.pkce_enabled
                 )
             return f"{self._login_url}" if self._login_url else None
+
+    def on_stop(self) -> None:
+        if cache := self.track_cache:
+            cache.stop()
