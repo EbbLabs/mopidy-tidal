@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 
 from .cache import SQLiteCache
-from .proxy import ThreadedProxy, Proxy, ProxyConfig
+from .proxy import Proxy, ProxyConfig, ThreadedProxy
 
 
 @functools.cache
