@@ -2,7 +2,7 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from logging import getLogger
 from typing import (
@@ -21,7 +21,12 @@ logger = getLogger()
 Bytes = bytes | bytearray
 Head = NewType("Head", bytes)
 Path = NewType("Path", bytes)
+TidalID = NewType("TidalID", str)
 EntryID = NewType("EntryID", bytes)
+
+class Entry(NamedTuple):
+    path: Path
+    entry_id: EntryID
 
 
 @dataclass
@@ -422,7 +427,37 @@ RETURNING data
                     "UPDATE head SET is_final=true WHERE entry_id=?",
                     (insertion.entry_id,),
                 )
+                with suppress(sqlite3.OperationalError):
+                    cur.execute(
+                        "UPDATE path SET entry_id=? WHERE path=?", (insertion.entry_id, path)
+                    )
                 self.evict()
             else:
                 cur.execute("DELETE from head WHERE entry_id=?", (insertion.entry_id,))
                 cur.execute("DELETE from body WHERE entry_id=?", (insertion.entry_id,))
+
+    def lookup_path(self, id: TidalID) -> Path | None:
+        match self.conn.execute("SELECT path FROM path WHERE tidal_id=? LIMIT 1", (id,)).fetchone():
+            case (path,):
+                return Path(path)
+            case _:
+                return None
+
+    def insert_path(self, id: TidalID, path: Path) -> None:
+        with self.conn as conn:
+            conn.execute("INSERT INTO path (tidal_id, path) VALUES (?, ?)", (id, path))
+
+    def lookup_entry(self, id: TidalID) -> Entry | None:
+        res = self.conn.execute("""
+SELECT
+  path.path
+  , head.entry_id
+FROM path
+JOIN head on path.entry_id = head.entry_id
+WHERE path.tidal_id = ? AND head.is_final
+        """, (id,)).fetchone()
+        match res:
+            case (path, entry_id):
+                return Entry(path, entry_id)
+            case _:
+                return None

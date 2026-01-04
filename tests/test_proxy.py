@@ -22,6 +22,7 @@ from mopidy_tidal.gstreamer_proxy.cache import (
     Insertion,
     Path,
     SQLiteCache,
+    TidalID,
 )
 from mopidy_tidal.gstreamer_proxy.proxy import Proxy as ProxyInstance
 from mopidy_tidal.gstreamer_proxy.proxy import ProxyConfig, ThreadedProxy
@@ -634,3 +635,84 @@ class TestSQLiteCache:
         assert not cache.get_head(keys[1])  # never accessed, aged out
         assert cache.get_head(keys[2])
         assert cache.get_head(keys[3])
+
+class TestPathCache:
+    def test_an_empty_cache_has_no_paths_in_it(self):
+        conn = sqlite3.connect(":memory:")
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        assert not cache.lookup_path(TidalID("tidal:track:0:0:0"))
+
+    def test_a_path_alias_can_be_manually_inserted(self):
+        conn = sqlite3.connect(":memory:")
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        cache.insert_path(TidalID("tidal:track:0:0:0"), Path(b"/foo/bar"))
+
+        assert cache.lookup_path(TidalID("tidal:track:0:0:0")) == Path(b"/foo/bar")
+
+    def test_no_entry_exists_for_an_id_we_havent_fetched(self):
+        conn = sqlite3.connect(":memory:")
+        cache = SQLiteCache(conn)
+        cache.init()
+
+        cache.insert_path(TidalID("tidal:track:0:0:0"), Path(b"/foo/bar"))
+
+        assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
+
+    def test_no_entry_exists_for_an_id_we_havent_finished_fetching(self):
+        conn = sqlite3.connect(":memory:")
+        cache = SQLiteCache(conn)
+        path = Path(b"/foo/bar")
+        cache.init()
+
+        cache.insert_path(TidalID("tidal:track:0:0:0"), path)
+        with cache.insertion(path) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+
+                assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
+        assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
+
+    def test_an_entry_exists_for_an_id_we_have_fetched(self):
+        conn = sqlite3.connect(":memory:")
+        cache = SQLiteCache(conn)
+        path = Path(b"/foo/bar")
+        cache.init()
+
+        cache.insert_path(TidalID("tidal:track:0:0:0"), path)
+        with cache.insertion(path) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+                insertion.finalise()
+
+        entry = cache.lookup_entry(TidalID("tidal:track:0:0:0"))
+
+        assert entry
+        assert entry.path == path
+        assert entry.entry_id == insertion.entry_id
+
+    def test_no_entry_exists_for_an_id_we_have_removed(self):
+        conn = sqlite3.connect(":memory:")
+        cache = SQLiteCache(conn, 1)
+        path = Path(b"/foo/bar")
+        cache.init()
+
+        cache.insert_path(TidalID("tidal:track:0:0:0"), path)
+        with cache.insertion(path) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+                insertion.finalise()
+
+        assert cache.lookup_entry(TidalID("tidal:track:0:0:0"))
+
+        with cache.insertion(Path("/bar/baz")) as insertion:
+                insertion.save_head(Head(b"head"))
+                insertion.save_body_chunk(b"body", 0)
+                insertion.finalise()
+
+        assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
+        # cascade delete will remove path cache entries where we don't have any data but used to
+        assert not cache.lookup_path(TidalID("tidal:track:0:0:0"))
