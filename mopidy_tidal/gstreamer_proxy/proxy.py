@@ -357,6 +357,10 @@ class ThreadedProxy:
         self.config = asyncio.run_coroutine_threadsafe(proxy.start(), loop).result()
         self.loop = loop
 
+        # NOTE there is no race condition here: the thread calls .init() to get
+        # the config, so the DB is guaranteed to be in a known state.
+        self.cache = proxy.cache_factory()
+
     def stop(self, block: bool = True):
         self.loop.call_soon_threadsafe(lambda: self.inner.event.set())
         if block:
@@ -375,6 +379,10 @@ class ProcessProxy:
         )
         self.proc.start()
         self.config = queue.get()
+
+        # NOTE there is no race condition here: the subprocess calls .init() to
+        # get the config, so the DB is guaranteed to be in a known state.
+        self.cache = proxy.cache_factory()
 
     def stop(self, block: bool = True):
         self.proc.terminate()
