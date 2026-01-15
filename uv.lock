@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = ">=3.11"
+requires-python = ">=3.11, <4.0"
 
 [[package]]
 name = "certifi"
@@ -311,7 +311,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mopidy", specifier = ">=3.0" },
-    { name = "tidalapi", specifier = ">=0.8.9" },
+    { name = "tidalapi", specifier = ">=0.8.10" },
 ]
 
 [package.metadata.requires-dev]
