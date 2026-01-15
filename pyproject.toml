@@ -5,22 +5,22 @@ description = "Mopidy Extension for Tidal music service integration."
 readme = "README.md"
 license = { text = "Apache License 2.0" }
 authors = [
-  { name = "Johannes Linde", email = "tehkillerbee@users.noreply.github.com" }
+    { name = "Johannes Linde", email = "tehkillerbee@users.noreply.github.com" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11,<4.0"
 
 classifiers = [
-  "Environment :: No Input/Output (Daemon)",
-  "Intended Audience :: End Users/Desktop",
-  "License :: OSI Approved :: Apache Software License",
-  "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3",
-  "Topic :: Multimedia :: Sound/Audio :: Players",
+    "Environment :: No Input/Output (Daemon)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Players",
 ]
 
 dependencies = [
-  "Mopidy>=3.0",
-  "tidalapi>=0.8.9",
+    "Mopidy>=3.0",
+    "tidalapi>=0.8.10",
 ]
 
 [project.urls]
@@ -28,20 +28,20 @@ Repository = "https://github.com/EbbLabs/mopidy-tidal"
 
 [dependency-groups]
 dev = [
-  "pytest>=7.3.1",
-  "pytest-mock>=3.10.0",
-  "pytest-sugar>=0.9.7",
-  "pytest-cov>=4.0.0",
-  "pexpect>=4.8.0",
-  "pytest-diff>=0.1.14",
-  "ruff>=0.14.10",
+    "pytest>=7.3.1",
+    "pytest-mock>=3.10.0",
+    "pytest-sugar>=0.9.7",
+    "pytest-cov>=4.0.0",
+    "pexpect>=4.8.0",
+    "pytest-diff>=0.1.14",
+    "ruff>=0.14.10",
 ]
 
 complete = [
-  "pygobject>=3.44.1",
-  "mopidy-local>=3.2.1",
-  "mopidy-iris>=3.66.1",
-  "mopidy-mpd>=3.3",
+    "pygobject>=3.44.1",
+    "mopidy-local>=3.2.1",
+    "mopidy-iris>=3.66.1",
+    "mopidy-mpd>=3.3",
 ]
 
 [project.entry-points."mopidy.ext"]
@@ -53,18 +53,18 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 markers = [
-  "gt_3_10: Mark a test as requiring python > 3.10.",
-  "poor_test: Mark a test in need of improvement",
-  "insufficiently_decoupled: Mark a test as insufficiently decoupled from implementation",
+    "gt_3_10: Mark a test as requiring python > 3.10.",
+    "poor_test: Mark a test in need of improvement",
+    "insufficiently_decoupled: Mark a test as insufficiently decoupled from implementation",
 ]
 filterwarnings = [
-  "error::DeprecationWarning:mopidy[.*]",
-  "error::PendingDeprecationWarning:mopidy[.*]",
+    "error::DeprecationWarning:mopidy[.*]",
+    "error::PendingDeprecationWarning:mopidy[.*]",
 ]
 addopts = "--cov=mopidy_tidal --cov-branch --cov-report=term-missing --cov-report=html"
 testpaths = ["tests"]
 
 [tool.ruff]
 lint.extend-select = [
-"I", # Imports
+    "I", # Imports
 ]
