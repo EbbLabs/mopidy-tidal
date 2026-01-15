@@ -1,5 +1,13 @@
 # Changelog
 
+#### v0.3.13
+
+- Bugfix: Avoid MPD manifest parsing to fix regression with new/incompatible TIDAL MPD
+  manifests *by [BlackLight](https://github.com/BlackLight)*
+- Swap poetry for uv *by [2e0byo](https://github.com/2e0byo)*
+- Lint with ruff *by [2e0byo](https://github.com/2e0byo)*
+- tidalapi version bump to v0.8.10
+
 #### v0.3.12
 
 - tidalapi version bump to v0.8.7
