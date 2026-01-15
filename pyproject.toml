@@ -1,6 +1,6 @@
 [project]
 name = "mopidy-tidal"
-version = "0.3.12"
+version = "0.3.13"
 description = "Mopidy Extension for Tidal music service integration."
 readme = "README.md"
 license = { text = "Apache License 2.0" }
