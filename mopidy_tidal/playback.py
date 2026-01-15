@@ -38,19 +38,18 @@ class TidalPlaybackProvider(backend.PlaybackProvider):
                 )
 
         stream = session.track(track_id).get_stream()
-        manifest = stream.get_stream_manifest()
         logger.info("MimeType:{}".format(stream.manifest_mime_type))
-        logger.info(
-            "Starting playback of track:{}, (quality:{}, codec:{}, {}bit/{}Hz)".format(
-                track_id,
-                stream.audio_quality,
-                manifest.get_codecs(),
-                stream.bit_depth,
-                stream.sample_rate,
-            )
-        )
 
         if stream.manifest_mime_type == ManifestMimeType.MPD:
+            logger.info(
+                "Starting playback of track:{}, (quality:{}, {}bit/{}Hz)".format(
+                    track_id,
+                    stream.audio_quality,
+                    stream.bit_depth,
+                    stream.sample_rate,
+                )
+            )
+
             data = stream.get_manifest_data()
             if data:
                 mpd_path = Path(
@@ -63,6 +62,16 @@ class TidalPlaybackProvider(backend.PlaybackProvider):
             else:
                 raise AttributeError("No MPD manifest available!")
         elif stream.manifest_mime_type == ManifestMimeType.BTS:
+            manifest = stream.get_stream_manifest()
+            logger.info(
+                "Starting playback of track:{}, (quality:{}, codec:{}, {}bit/{}Hz)".format(
+                    track_id,
+                    stream.audio_quality,
+                    manifest.get_codecs(),
+                    stream.bit_depth,
+                    stream.sample_rate,
+                )
+            )
             urls = manifest.get_urls()
             if isinstance(urls, list):
                 return urls[0]
