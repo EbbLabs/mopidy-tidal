@@ -3,7 +3,7 @@ from mopidy.models import Album, Artist, Image, Ref, SearchResult, Track
 from requests import HTTPError
 from tidalapi.playlist import Playlist
 
-from mopidy_tidal.library import HTTPError, ObjectNotFound, TidalLibraryProvider
+from mopidy_tidal.library import ObjectNotFound, TidalLibraryProvider
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ class TestBrowse:
             make_tidal_artist(name="Arty", id=1),
             make_tidal_artist(name="Arthur", id=1_000),
         ]
-        mocker.patch("mopidy_tidal.library.get_items", lambda x: x)
+        mocker.patch("tidalapi.workers.get_items", lambda x: x)
 
         assert library_provider.browse("tidal:my_artists") == [
             Ref(name="Arty", type="artist", uri="tidal:artist:1"),
@@ -118,7 +118,7 @@ class TestBrowse:
             make_tidal_album(name="Alby", id=7),
             make_tidal_album(name="Albion", id=7_000),
         ]
-        mocker.patch("mopidy_tidal.library.get_items", lambda x: x)
+        mocker.patch("tidalapi.workers.get_items", lambda x: x)
 
         assert library_provider.browse("tidal:my_albums") == [
             Ref(name="Alby", type="album", uri="tidal:album:7"),
@@ -140,7 +140,7 @@ class TestBrowse:
             make_tidal_track(name="Tracky", id=12, artist=artist, album=album),
             make_tidal_track(name="Traction", id=13, artist=artist, album=album),
         ]
-        mocker.patch("mopidy_tidal.library.get_items", lambda x: x)
+        mocker.patch("tidalapi.workers.get_items", lambda x: x)
 
         assert library_provider.browse("tidal:my_tracks") == [
             Ref(name="Tracky", type="track", uri="tidal:track:6:7:12"),

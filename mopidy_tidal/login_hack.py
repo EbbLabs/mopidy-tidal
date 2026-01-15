@@ -1,10 +1,8 @@
 import inspect
 from abc import ABC
-from contextlib import suppress
 from functools import reduce, wraps
 from itertools import chain
 from logging import getLogger
-from pathlib import Path
 from types import FunctionType
 from typing import TYPE_CHECKING, Optional, Union, get_args, get_origin
 from urllib.parse import urlencode

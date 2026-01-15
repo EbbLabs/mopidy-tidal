@@ -11,9 +11,8 @@ from pykka import ThreadingActor
 from tidalapi import Config, Session
 from tidalapi import __version__ as tidalapi_ver
 
-from mopidy_tidal import Extension
+from mopidy_tidal import Extension, context, library, playback, playlists
 from mopidy_tidal import __version__ as mopidy_tidal_ver
-from mopidy_tidal import context, library, playback, playlists
 from mopidy_tidal.web_auth_server import WebAuthServer
 
 logger = logging.getLogger(__name__)
@@ -191,7 +190,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
                 # Parse and set tokens.
                 self._active_session.process_auth_token(json, is_pkce_token=True)
                 self._logged_in = True
-            except:
+            except Exception:
                 raise ValueError("Response code is required for PKCE login!")
         # Store session after auth completion
         self._complete_login()

@@ -232,7 +232,7 @@ class TestPlaylistMethods:
             type(backend), "session", new_callable=PropertyMock, return_value=session
         )
 
-        mocker.patch("mopidy_tidal.playlists.get_items", lambda x: x)
+        mocker.patch("tidalapi.workers.get_items", lambda x: x)
 
         assert backend.logged_in
         assert not backend.logging_in
@@ -323,7 +323,7 @@ class TestPlaybackMethods:
         )
 
         # Patch get_items as before
-        mocker.patch("mopidy_tidal.playlists.get_items", lambda x: x)
+        mocker.patch("tidalapi.workers.get_items", lambda x: x)
 
         backend._logged_in = True
         tpp = TidalPlaylistsProvider(backend=backend)

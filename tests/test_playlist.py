@@ -278,7 +278,7 @@ def test_refresh(tpp, mocker):
 
 def test_as_list(tpp, mocker, tidal_playlists):
     tpp, backend = tpp
-    mocker.patch("mopidy_tidal.playlists.get_items", lambda x: x)
+    mocker.patch("tidalapi.workers.get_items", lambda x: x)
     # Mock the single playlists_paginated method returning all playlists
     backend.session.user.favorites.playlists_paginated.return_value = tidal_playlists
     assert tpp.as_list() == [
@@ -289,7 +289,7 @@ def test_as_list(tpp, mocker, tidal_playlists):
 
 def test_prevent_duplicate_playlist_sync(tpp, mocker, tidal_playlists):
     tpp, backend = tpp
-    mocker.patch("mopidy_tidal.playlists.get_items", lambda x: x)
+    mocker.patch("tidalapi.workers.get_items", lambda x: x)
 
     # Mock the single playlists_paginated method returning all playlists
     backend.session.user.favorites.playlists_paginated.return_value = tidal_playlists
@@ -315,7 +315,7 @@ def test_playlist_sync_downtime(mocker, tidal_playlists, config):
     backend = mocker.Mock()
     tpp = TidalPlaylistsProvider(backend)
     tpp._playlists = PlaylistCache(persist=False)
-    mocker.patch("mopidy_tidal.playlists.get_items", lambda x: x)
+    mocker.patch("tidalapi.workers.get_items", lambda x: x)
     backend._config = {"tidal": {"playlist_cache_refresh_secs": 0.1}}
 
     # Mock playlists_paginated() returning the first playlist initially
@@ -362,7 +362,7 @@ def test_update_changes(tpp, mocker, tidal_playlists):
         }
     )
 
-    mocker.patch("mopidy_tidal.playlists.get_items", lambda x: x)
+    mocker.patch("tidalapi.workers.get_items", lambda x: x)
     backend.session.user.favorites.playlists_paginated.return_value = tidal_playlists
     assert tpp.as_list() == [
         Ref(name="Playlist-101", type="playlist", uri="tidal:playlist:101"),
@@ -383,7 +383,7 @@ def test_update_no_changes(tpp, mocker, tidal_playlists):
         }
     )
 
-    mocker.patch("mopidy_tidal.playlists.get_items", lambda x: x)
+    mocker.patch("tidalapi.workers.get_items", lambda x: x)
     backend.session.user.favorites.playlists_paginated.return_value = tidal_playlists
     assert tpp.as_list() == [
         Ref(name="Playlist-101", type="playlist", uri="tidal:playlist:101"),

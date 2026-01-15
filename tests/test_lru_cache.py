@@ -1,10 +1,9 @@
 import os
 import shutil
-from pathlib import Path
 
 import pytest
 
-from mopidy_tidal.lru_cache import LruCache, SearchCache
+from mopidy_tidal.lru_cache import LruCache
 
 
 @pytest.fixture
@@ -23,10 +22,10 @@ def lru_cache(request) -> LruCache:
 
 
 def test_config_stored_on_cache():
-    l = LruCache(max_size=1678, persist=True, directory="cache")
+    cache = LruCache(max_size=1678, persist=True, directory="cache")
 
-    assert l.max_size == 1678
-    assert l.persist
+    assert cache.max_size == 1678
+    assert cache.persist
 
 
 class TestDiskPersistence:
@@ -108,7 +107,7 @@ class TestDiskPersistence:
 
         assert new_cache["tidal:uri:val"] == "hi"
         assert new_cache["tidal:uri:otherval"] == 17
-        assert new_cache["tidal:uri:none"] == None
+        assert new_cache["tidal:uri:none"] is None
 
 
 def test_raises_key_error_if_target_missing(lru_cache):

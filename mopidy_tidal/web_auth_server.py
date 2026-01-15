@@ -83,7 +83,7 @@ class HTTPHandler(BaseHTTPRequestHandler, object):
         callback: Callable[[str], None],
         pkce_enabled: bool,
         *args,
-        **kwargs
+        **kwargs,
     ):
         self.login_url = login_url
         self.callback_fn: Callable = callback
