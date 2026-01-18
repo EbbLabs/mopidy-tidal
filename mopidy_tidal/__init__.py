@@ -39,6 +39,7 @@ class Extension(ext.Extension):
             optional=True, choices=range(8000, 9000)
         )
         schema["track_cache"] = config.Boolean(optional=True)
+        schema["track_cache_max_entries"] = config.Integer(optional=True, minimum=1)
         return schema
 
     def setup(self, registry):

@@ -65,7 +65,9 @@ class TidalBackend(ThreadingActor, backend.Backend):
             / "track.db"
         )
         if path:
-            return mopidy_track_cache(path)
+            return mopidy_track_cache(
+                path, self._tidal_config["track_cache_max_entries"]
+            )
         else:
             return None
 
