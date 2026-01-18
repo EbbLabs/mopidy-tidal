@@ -1,5 +1,5 @@
 {
-  description = "gstreamer proxy";
+  description = "Mopidy Extension for Tidal music service integration.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -19,22 +19,28 @@
           inherit system;
         };
         python = pkgs.python313;
-        # 'build time' deps
         buildInputs =
           (with pkgs; [
             (python.withPackages (ps:
               with ps; [
                 gst-python
                 pygobject3
-                # packages not specified in pyproject.toml: these will be available in the venv.
               ]))
+            # dev
             uv
             pre-commit
             ruff
+            # deps
+            mopidy # for its build inputs, and local testing
             gobject-introspection
+            glib-networking
+            # integration tests
+            mpc
+            # local testing
+            mopidy-local
+            mopidy-iris
           ])
           ++ (with pkgs.gst_all_1; [
-            # glib-networking
             gst-plugins-bad
             gst-plugins-base
             gst-plugins-good
@@ -42,10 +48,9 @@
             gst-plugins-rs
           ]);
         env = {
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-            pkgs.stdenv.cc.cc # allow building c extensions
-          ];
           UV_PROJECT_ENVIRONMENT = ".direnv/venv";
+          # libsoup_3 is broken, and why wouldn't you use curl?
+          GST_PLUGIN_FEATURE_RANK = "curlhttpsrc:MAX";
         };
       in
         with pkgs; {
