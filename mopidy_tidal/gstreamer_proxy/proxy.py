@@ -306,7 +306,7 @@ class Proxy[C: Cache]:
                     )
                     insertion.save_head(Head(bytes(head)))
 
-                    buffer_bytes = 1024 * 1024 * 2  # 2 MiB for now
+                    buffer_bytes = 1024 * 1024 * 16  # 16 MiB for now
                     buffer = types.Buffer.with_capacity(buffer_bytes)
                     offset = 0
                     read = 0
