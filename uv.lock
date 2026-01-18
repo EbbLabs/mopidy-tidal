@@ -285,7 +285,7 @@ wheels = [
 [[package]]
 name = "mopidy-tidal"
 version = "0.3.13"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "mopidy" },
     { name = "tidalapi" },
