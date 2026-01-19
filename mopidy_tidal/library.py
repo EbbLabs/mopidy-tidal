@@ -506,7 +506,7 @@ class TidalLibraryProvider(backend.LibraryProvider):
             logger.warning("No such album: %s", album_id)
             tracks = []
         except TooManyRequests:
-            logger.warning("Too many requests when fetching album: %s", album_id)
+            logger.warning("TooManyRequests when fetching album tracks: %s", album_id)
             tracks = []
 
         # If album is unavailable, no tracks will be returned
