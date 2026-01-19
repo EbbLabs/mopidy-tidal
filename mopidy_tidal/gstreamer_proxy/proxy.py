@@ -1,3 +1,22 @@
+"""An HTTP relay proxy for streaming media.
+
+This module provides a simple relay server which works as follows:
+
+- an incoming request is looked up in the cache by its path
+
+- if present, the request is served from the cache (with the head appropriately
+  modified for its new origin)
+
+- otherwise a connection is opened to the remote server and the request is
+  relayed. The incoming data is sent to the client (here: gstreamer) and saved
+  in chunks in the cache.
+
+- if the entire resource is downloaded the insertion is finalised: subsequent
+  requests will be served from the cache. Otherwise, the cached data is thrown away.
+
+This cache has no external dependencies.
+"""
+
 import asyncio
 import multiprocessing
 import threading
@@ -19,6 +38,8 @@ basicConfig()
 
 @dataclass
 class ProxyConfig:
+    """Configuration needed to start a proxy."""
+
     port: int | None
     remote_url: str
     parsed: urllib.parse.ParseResult
@@ -40,6 +61,8 @@ class ProxyConfig:
 
 @dataclass
 class StartedProxyConfig:
+    """Resolved configuration from a running proxy."""
+
     port: int
     remote_url: str
 
@@ -52,6 +75,8 @@ class StartedProxyConfig:
 
 @dataclass
 class Stream:
+    """A wrapper round a pair of reader / writers with a few convenience methods."""
+
     rx: asyncio.StreamReader
     tx: asyncio.StreamWriter
 
@@ -83,6 +108,8 @@ class Stream:
 
 @dataclass
 class Connection:
+    """A paired connection between a local client and a remote server."""
+
     local: Stream
     remote: Stream | None
 
@@ -100,6 +127,8 @@ class Connection:
 
 @dataclass
 class Request:
+    """An HTTP request, minimally parsed."""
+
     path: urllib.parse.ParseResultBytes
     keep_alive: bool
     range: types.Range
@@ -108,6 +137,7 @@ class Request:
     raw_rest: bytearray
 
     def into_remote(self, remote_host: str, remote_port: int) -> Self:
+        """Transform this request to send it to the remote server."""
         self.raw_host = f"Host: {remote_host}:{remote_port}\r\n".encode()
         return self
 
@@ -148,6 +178,8 @@ type CacheFactory[C] = Callable[[], C]
 
 
 class Ignore:
+    """Ignore one or more exceptions, logging the before discarding."""
+
     def __init__(self, *exceptions: type[Exception]) -> None:
         self.exceptions = exceptions
 
@@ -166,21 +198,26 @@ class Ignore:
 
 @dataclass
 class Proxy[C: Cache]:
+    """A proxy server for a given remote server."""
+
     config: ProxyConfig
     cache_factory: CacheFactory[C]
     started: bool = False
     event: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def block(self) -> None:
+        """Block as long as this server is running."""
         await self.event.wait()
         logger.info("Proxy exiting...")
 
     async def block_start(self, queue: multiprocessing.Queue) -> None:
+        """Start and block as long as this server is running."""
         config = await self.start()
         queue.put(config)
         await self.block()
 
     async def start(self) -> StartedProxyConfig:
+        """Start this server, returning the resultant config."""
         self.cache = self.cache_factory()
         server = await asyncio.start_server(
             self.handle_request, "127.0.0.1", self.config.port or 0
@@ -194,6 +231,7 @@ class Proxy[C: Cache]:
         return config
 
     async def parse_request(self, local: Stream) -> Request:
+        """Read enough of an HTTP connection to understand the request."""
         raw_rest = bytearray()
         raw_first = await local.readline()
         verb, path_args, protocol = raw_first.split()
@@ -226,6 +264,8 @@ class Proxy[C: Cache]:
         )
 
     async def stream_head(self, local: Stream, remote: Stream) -> types.Head:
+        """Proxy the head of an HTTP request between remote and local,
+        returning it."""
         head = bytearray()
 
         line = await remote.readline()
@@ -246,6 +286,7 @@ class Proxy[C: Cache]:
         return types.Head.from_raw(head)
 
     async def error(self, local: Stream, code: int = 400, msg: bytes = b"") -> None:
+        """Tell the client that something failed."""
         await local.write(f"HTTP/1.1 {code}\r\n\r\n".encode())
         if msg:
             await local.write(msg)
@@ -254,13 +295,18 @@ class Proxy[C: Cache]:
     async def handle_request(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
+        """Handle an incoming local connection, serving the requested resource
+        from the cache or proxying it."""
+
         local = Stream(reader, writer)
         del reader, writer
+
         with Connection(local, remote=None).close_on_error() as connection:
             request = await self.parse_request(local)
 
             path = Path(request.cache_key())
 
+            # cache hit
             if head := self.cache.get_head(path):
                 logger.debug(
                     "Serving %s from cache (%s)", request.path.path, request.range
@@ -291,6 +337,7 @@ class Proxy[C: Cache]:
                 for chunk in chunks.data:
                     await local.write(chunk)
 
+            # cache miss
             else:
                 logger.debug("Proxying %s from remote", request.path.path)
                 with self.cache.insertion(path) as insertion:
@@ -347,6 +394,8 @@ class Proxy[C: Cache]:
 
 
 class ThreadedProxy:
+    """A proxy, running in a new asyncio loop inside a thread."""
+
     def __init__(self, proxy: Proxy) -> None:
         self.inner = proxy
         loop = asyncio.new_event_loop()
@@ -368,6 +417,8 @@ class ThreadedProxy:
 
 
 class ProcessProxy:
+    """A proxy, running in a new asyncio loop inside a process."""
+
     def __init__(self, proxy: Proxy) -> None:
         from multiprocessing import Process
 
