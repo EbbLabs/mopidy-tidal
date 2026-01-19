@@ -13,7 +13,7 @@ from tidalapi import __version__ as tidalapi_ver
 
 from mopidy_tidal import Extension, context, library, playback, playlists
 from mopidy_tidal import __version__ as mopidy_tidal_ver
-from mopidy_tidal.gstreamer_proxy import ThreadedProxy, mopidy_track_cache
+from mopidy_tidal.gstreamer_proxy import ThreadedProxy, mopidy_playback_cache
 from mopidy_tidal.web_auth_server import WebAuthServer
 
 logger = logging.getLogger(__name__)
@@ -56,17 +56,17 @@ class TidalBackend(ThreadingActor, backend.Backend):
         self.login_server_port: int = 8989
 
     @property
-    def track_cache(self) -> ThreadedProxy | None:
+    def playback_cache(self) -> ThreadedProxy | None:
         path = (
             Path(
-                self._tidal_config["track_cache"]
+                self._tidal_config["playback_cache"]
                 and Extension.get_cache_dir(self._config)
             )
-            / "track.db"
+            / "playback.db"
         )
         if path:
-            return mopidy_track_cache(
-                path, self._tidal_config["track_cache_max_entries"]
+            return mopidy_playback_cache(
+                path, self._tidal_config["playback_cache_max_entries"]
             )
         else:
             return None
@@ -249,5 +249,5 @@ class TidalBackend(ThreadingActor, backend.Backend):
             return f"{self._login_url}" if self._login_url else None
 
     def on_stop(self) -> None:
-        if cache := self.track_cache:
+        if cache := self.playback_cache:
             cache.stop()

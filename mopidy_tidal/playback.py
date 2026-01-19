@@ -90,7 +90,7 @@ class TidalPlaybackProvider(backend.PlaybackProvider):
     def translate_uri(self, uri) -> str:
         logger.info("TIDAL uri: %s", uri)
 
-        if proxy := self.backend.track_cache:
+        if proxy := self.backend.playback_cache:
             id = cache.TidalID(uri)
             if entry := proxy.cache.lookup_entry(id):
                 return proxy.config.local_url(entry.path.decode())
