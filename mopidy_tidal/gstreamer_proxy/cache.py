@@ -173,37 +173,37 @@ class Metadata(NamedTuple):
     offsets: list[int]
     entry_id: EntryID
 
-
-def _metadata(cur: sqlite3.Cursor, path: Path) -> Metadata | None:
-    cur.execute(
-        """
-WITH target AS (
-  SELECT entry_id FROM head
-  WHERE path=? AND is_final
-  ORDER BY last_used DESC
-  LIMIT 1
-)
-SELECT
-  start
-  , len
-  , body.entry_id
-FROM body
-JOIN target ON target.entry_id=body.entry_id
-ORDER BY start ASC
-    """,
-        (path,),
+    @classmethod
+    def lookup(cls, cur: sqlite3.Cursor, path: Path) -> Self | None:
+        cur.execute(
+            """
+    WITH target AS (
+      SELECT entry_id FROM head
+      WHERE path=? AND is_final
+      ORDER BY last_used DESC
+      LIMIT 1
     )
-    offsets = []
-    total = 0
-    entry_id = None
-    for start, length, entry_id in cur.fetchall():
-        offsets.append(start)
-        total += length
+    SELECT
+      start
+      , len
+      , body.entry_id
+    FROM body
+    JOIN target ON target.entry_id=body.entry_id
+    ORDER BY start ASC
+        """,
+            (path,),
+        )
+        offsets = []
+        total = 0
+        entry_id = None
+        for start, length, entry_id in cur.fetchall():
+            offsets.append(start)
+            total += length
 
-    if entry_id:
-        return Metadata(total, offsets, entry_id)
-    else:
-        return None
+        if entry_id:
+            return cls(total, offsets, entry_id)
+        else:
+            return None
 
 
 @dataclass
@@ -323,7 +323,7 @@ RETURNING data
 
     def get_body(self, path: Path) -> Chunk | None:
         cur = self.conn.cursor()
-        if metadata := _metadata(cur, path):
+        if metadata := Metadata.lookup(cur, path):
             total, offsets, entry_id = metadata
             return Chunk(
                 data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
@@ -334,7 +334,7 @@ RETURNING data
 
     def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
         cur = self.conn.cursor()
-        if metadata := _metadata(cur, path):
+        if metadata := Metadata.lookup(cur, path):
             total, offsets, entry_id = metadata
             return Chunk(
                 data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
