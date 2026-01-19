@@ -37,13 +37,6 @@ After installing Mopidy, you can now proceed installing the plugins that you req
 sudo pip3 install Mopidy-Tidal
 ```
 
-Poetry can also be used to install mopidy-tidal and its dependencies.
-
-```
-cd <mopidy-tidal source root>
-poetry install
-```
-
 ##### Note: Make sure to install the Mopidy-Tidal plugin in the same python venv used by your Mopidy installation. Otherwise, the plugin will NOT be detected.
 
 ### Install from latest sources

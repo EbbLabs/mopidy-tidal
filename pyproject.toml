@@ -3,16 +3,15 @@ name = "mopidy-tidal"
 version = "0.3.13"
 description = "Mopidy Extension for Tidal music service integration."
 readme = "README.md"
-license = { text = "Apache License 2.0" }
+license = "Apache-2.0"
 authors = [
     { name = "Johannes Linde", email = "tehkillerbee@users.noreply.github.com" }
 ]
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.11"
 
 classifiers = [
     "Environment :: No Input/Output (Daemon)",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Topic :: Multimedia :: Sound/Audio :: Players",
@@ -48,8 +47,11 @@ complete = [
 tidal = "mopidy_tidal:Extension"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.9,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
 
 [tool.pytest.ini_options]
 markers = [

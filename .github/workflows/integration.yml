@@ -13,33 +13,81 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.9, "3.10", 3.11]
-        mopidy-version: [3.3, 3.4, "git"]
+        versions:
+          -
+            python: 3.11
+            mopidy: 3.3
+          -
+            python: 3.12
+            mopidy: 3.3
+          -
+            python: 3.13
+            mopidy: 3.3
+          -
+            python: 3.14
+            mopidy: 3.3
+          -
+            python: 3.11
+            mopidy: 3.4
+          -
+            python: 3.12
+            mopidy: 3.4
+          -
+            python: 3.13
+            mopidy: 3.4
+          -
+            python: 3.14
+            mopidy: 3.4
+          # mopidy latest requires a gstreamer not yet in ubuntu; disabling for now.
+          # -
+          #   python: 3.13
+          #   mopidy: git
+          # -
+          #   python: 3.14
+          #   mopidy: git
       # Run all the matrix jobs, even if one fails.
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Install Mopidy system-wide
-        run: sudo apt update && sudo apt install mopidy libgirepository1.0-dev mpc
-      - name: Install Poetry
-        uses: abatilo/actions-poetry@v2
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'poetry'
+          python-version: ${{ matrix.versions.python }}
+          enable-cache: true
+          cache-suffix: ${{ matrix.versions.python }}-${{ matrix.versions.mopidy }}
+
+      - name: Install Mopidy system-wide
+        run: |
+          sudo apt update
+          sudo apt install mopidy libgirepository1.0-dev mpc \
+            build-essential python3-dev python3-pip \
+            gir1.2-gst-plugins-base-1.0 \
+            gir1.2-gstreamer-1.0 \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-ugly \
+            gstreamer1.0-tools \
+            libcairo2-dev \
+            libgirepository-2.0-dev \
+            python3-gst-1.0
+
       - name: Correct mopidy version
         run: |
-          if [ ${{ matrix.mopidy-version }} != "git" ]; then
-            poetry add mopidy@${{ matrix.mopidy-version }}
+          if [ ${{ matrix.versions.mopidy }} != "git" ]
+          then
+            uv add mopidy==${{ matrix.versions.mopidy }}
           else
-            poetry add "git+https://github.com/mopidy/mopidy.git"
+            # TODO remove when we update our bound
+            sed -i 's/requires-python.*/requires-python = ">=3.13"/' pyproject.toml
+            uv lock
+            uv add "mopidy @ git+https://github.com/mopidy/mopidy.git"
           fi
-          poetry show
+          uv pip show mopidy
+
       - name: Install mopidy-tidal
         run: |
-          rm poetry.lock
-          poetry install --with complete
+          uv sync --group complete
+
       - name: Integration test
         run: make integration-test
