@@ -33,7 +33,6 @@ from . import types
 from .cache import Cache, Head, Path
 
 logger = getLogger(__name__)
-basicConfig()
 
 
 @dataclass
