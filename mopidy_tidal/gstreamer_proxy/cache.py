@@ -1,3 +1,31 @@
+"""A cache supporting chunked insertion and finalisation.
+
+This module provides a cache designed for storing requests for the proxy,
+backed by a sqlite database. The cache models insertion as a fallible process:
+calling code is expected to do something like:
+
+```python
+with cache.insertion(path) as insertion:
+   ...
+   insertion.save_head(head)
+   ...
+   insertion.save_body_chunk(data, start)
+   ...
+   # only if everything went OK
+   insertion.finalise()
+```
+
+Data inserted inside the insertion context will be persisted immediately to
+disk but will be invisible to other lookups until `.finalise()` is called and
+tho context exited. Should the program crash, unfinalised data will be removed
+at the next startup.
+
+Additionally, the cache stores a mapping of TidalID -> Path (where the path is
+the identity of this record on the remote server). This allows fully offline
+operation for cached records, since we do not need to use `tidalapi` to work
+out which url we would try to get.
+"""
+
 import sqlite3
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
@@ -36,6 +64,11 @@ class Chunk:
 
 
 class Insertion(ABC):
+    """An insertion, i.e. a record we are saving as part of a proxying attempt.
+
+    We store the head and body chunks separately, since we have to receive the
+    entire head before being sure how to handle the request."""
+
     @abstractmethod
     def save_head(self, head: Head) -> None:
         """Save the head for the given path."""
@@ -53,6 +86,9 @@ class Insertion(ABC):
 
 
 class Cache[I: Insertion](ABC):
+    """A cache for the proxy, handling inserting and looking up remote
+    responses for local proxying."""
+
     @abstractmethod
     def get_head(self, path: Path) -> Head | None:
         """Get the head if present for the given path."""
@@ -70,6 +106,15 @@ class Cache[I: Insertion](ABC):
 
     def init(self) -> None:
         """Initialise storage if needed."""
+
+    def lookup_path(self, id: TidalID) -> Path | None:
+        """Lookup the path for the given TidalID."""
+
+    def insert_path(self, id: TidalID, path: Path) -> None:
+        """Insert a TidalID -> Path mapping."""
+
+    def lookup_entry(self, id: TidalID) -> Entry | None:
+        """Query for a (finalised) entry + Path for this TidalID."""
 
 
 @dataclass
@@ -142,11 +187,14 @@ class ChunkedBuffer:
 
 
 def entry_id() -> EntryID:
+    """A unique, opaque ID for an entry."""
     return EntryID(uuid4().bytes)
 
 
 @dataclass
 class SQLiteInsertion(Insertion):
+    """An unfinialised insertion into a cache backed by sqlite."""
+
     cur: sqlite3.Cursor
     path: Path
     final: bool = False
@@ -169,6 +217,11 @@ class SQLiteInsertion(Insertion):
 
 
 class Metadata(NamedTuple):
+    """Metadata about the particular DB layout of this record.
+
+    This is used to compute which chunks we need to load to serve a given
+    request (which may be partial)."""
+
     total: int
     offsets: list[int]
     entry_id: EntryID
@@ -212,6 +265,7 @@ class SQLiteCache(Cache[SQLiteInsertion]):
     max_entries: int | None = None
 
     def __post_init__(self) -> None:
+        # off (=unenforced) by default!
         self.conn.execute("PRAGMA foreign_keys = ON")
 
     def init(self) -> None:
@@ -281,6 +335,7 @@ CREATE TABLE IF NOT EXISTS path
             conn.execute("DELETE FROM head WHERE NOT is_final;")
 
     def evict(self) -> None:
+        """Delete least recently used entries to reduce down to declared max size."""
         if max_entries := self.max_entries:
             with self.conn as conn:
                 conn.execute(
