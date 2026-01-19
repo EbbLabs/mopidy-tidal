@@ -19,6 +19,8 @@
         system,
         ...
       }: let
+        pyProject = builtins.fromTOML (builtins.readFile ./pyproject.toml);
+        version = pyProject.project.version;
         python = pkgs.python313;
         buildInputs =
           [
@@ -60,6 +62,28 @@
             [ ! -d $UV_PROJECT_ENVIRONMENT ] && uv venv $UV_PROJECT_ENVIRONMENT --python ${python}/bin/python
             source $UV_PROJECT_ENVIRONMENT/bin/activate
           '';
+        };
+        packages.default = pkgs.python3Packages.buildPythonApplication {
+          pname = "mopidy-tidal";
+          inherit version;
+          pyproject = true;
+          src = ./.;
+          build-system = [pkgs.python3Packages.uv-build];
+          nativeCheckInputs = with pkgs.python3Packages; [
+            pytestCheckHook
+            pytest-asyncio
+            pytest-cov # since default pytest invocation includes --cov
+            pytest-mock
+            pytest-httpserver
+            pytest-cases
+            trustme
+            httpx
+          ];
+
+          dependencies = [
+            pkgs.mopidy
+            pkgs.python3Packages.tidalapi
+          ];
         };
       };
     };
