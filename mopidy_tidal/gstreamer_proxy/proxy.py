@@ -1,0 +1,407 @@
+"""An HTTP relay proxy for streaming media.
+
+This module provides a simple relay server which works as follows:
+
+- an incoming request is looked up in the cache by its path
+
+- if present, the request is served from the cache (with the head appropriately
+  modified for its new origin)
+
+- otherwise a connection is opened to the remote server and the request is
+  relayed. The incoming data is sent to the client (here: gstreamer) and saved
+  in chunks in the cache.
+
+- if the entire resource is downloaded the insertion is finalised: subsequent
+  requests will be served from the cache. Otherwise, the cached data is thrown away.
+
+This cache has no external dependencies.
+"""
+
+import asyncio
+import multiprocessing
+import threading
+import urllib.parse
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass, field
+from functools import wraps
+from logging import getLogger
+from ssl import SSLContext
+from typing import AsyncIterator, Awaitable, Callable, Iterator, Self
+from urllib.parse import urlparse, urlunparse
+
+from . import types
+from .cache import Cache, Head, Path
+
+logger = getLogger(__name__)
+
+
+@dataclass
+class ProxyConfig:
+    """Configuration needed to start a proxy."""
+
+    port: int | None
+    remote_url: str
+    parsed: urllib.parse.ParseResult
+
+    @classmethod
+    def build(cls, port: int | None, remote_url: str) -> Self:
+        return cls(port, remote_url, urlparse(remote_url))
+
+    def remote_host(self) -> str:
+        assert self.parsed.hostname
+        return self.parsed.hostname
+
+    def ssl(self) -> bool:
+        return self.parsed.scheme == "https"
+
+    def remote_port(self) -> int:
+        return self.parsed.port or (443 if self.ssl() else 80)
+
+
+@dataclass
+class StartedProxyConfig:
+    """Resolved configuration from a running proxy."""
+
+    port: int
+    remote_url: str
+
+    def local_url(self, remote_url: str) -> str:
+        parsed = urlparse(remote_url)._replace(
+            scheme="http", netloc=f"localhost:{self.port}"
+        )
+        return urlunparse(parsed)
+
+
+@dataclass
+class Stream:
+    """A wrapper round a pair of reader / writers with a few convenience methods."""
+
+    rx: asyncio.StreamReader
+    tx: asyncio.StreamWriter
+
+    async def write(self, data: bytes | bytearray, timeout: float = 60):
+        self.tx.write(data)
+        await asyncio.wait_for(self.tx.drain(), timeout=timeout)
+
+    @classmethod
+    async def connect(cls, *args, **kwargs) -> Self:
+        fut = asyncio.open_connection(*args, **kwargs)
+        rx, tx = await asyncio.wait_for(fut, 3.0)
+        return cls(rx, tx)
+
+    async def close(self):
+        with suppress(ConnectionError):
+            await self.tx.drain()
+        self.tx.close()
+
+    async def read(self, n: int, timeout: float = 60) -> bytes:
+        return await asyncio.wait_for(self.rx.read(n), timeout=timeout)
+
+    async def readline(self, timeout: float = 60) -> bytes:
+        return await asyncio.wait_for(self.rx.readline(), timeout=timeout)
+
+    async def lines(self, timeout: float = 60) -> AsyncIterator[bytes]:
+        while True:
+            yield await self.readline(timeout)
+
+
+@dataclass
+class Connection:
+    """A paired connection between a local client and a remote server."""
+
+    local: Stream
+    remote: Stream | None
+
+    @contextmanager
+    def close_on_error(self) -> Iterator[Self]:
+        try:
+            yield self
+        except Exception:
+            logger.warning("Errored, closing connection")
+            self.local.tx.close()
+            if self.remote:
+                self.remote.tx.close()
+            raise
+
+
+def ssl_context() -> SSLContext | None:
+    """SSL context to use for https.
+
+    This is overridden when testing so we can trust our local TLS cert. There is
+    probably no reason to use it otherwise."""
+    return None
+
+
+def check_status(status: bytes | bytearray) -> None:
+    val = int(status.decode())
+    if 200 <= val <= 300:
+        return None
+    else:
+        raise types.StatusError(val)
+
+
+type CacheFactory[C] = Callable[[], C]
+
+
+class Ignore:
+    """Ignore one or more exceptions, logging the before discarding."""
+
+    def __init__(self, *exceptions: type[Exception]) -> None:
+        self.exceptions = exceptions
+
+    def __call__[**P](
+        self, fn: Callable[P, Awaitable[None]]
+    ) -> Callable[P, Awaitable[None]]:
+        @wraps(fn)
+        async def inner(*args: P.args, **kwargs: P.kwargs) -> None:
+            try:
+                await fn(*args, **kwargs)
+            except self.exceptions as e:
+                logger.error("Ignoring exception: %s", repr(e))
+
+        return inner
+
+
+@dataclass
+class Proxy[C: Cache]:
+    """A proxy server for a given remote server."""
+
+    config: ProxyConfig
+    cache_factory: CacheFactory[C]
+    started: bool = False
+    event: asyncio.Event = field(default_factory=asyncio.Event)
+
+    async def block(self) -> None:
+        """Block as long as this server is running."""
+        await self.event.wait()
+        logger.info("Proxy exiting...")
+
+    async def block_start(self, queue: multiprocessing.Queue) -> None:
+        """Start and block as long as this server is running."""
+        config = await self.start()
+        queue.put(config)
+        await self.block()
+
+    async def start(self) -> StartedProxyConfig:
+        """Start this server, returning the resultant config."""
+        self.cache = self.cache_factory()
+        server = await asyncio.start_server(
+            self.handle_request, "127.0.0.1", self.config.port or 0
+        )
+        self._server = server
+        _, port = server.sockets[0].getsockname()
+        self.cache.init()
+        self.started = True
+        config = StartedProxyConfig(port, self.config.remote_url)
+        logger.debug("Proxy config: %s", config)
+        return config
+
+    async def parse_request(self, local: Stream) -> types.Request:
+        """Read enough of an HTTP connection to understand the request."""
+        raw_rest = bytearray()
+        raw_first = await local.readline()
+        verb, path_args, protocol = raw_first.split()
+        path = urlparse(path_args)
+        assert verb == b"GET"
+        assert protocol == b"HTTP/1.1"
+        keep_alive: bool = False
+        range = types.Range(None, None)
+        raw_host = None
+        async for line in local.lines():
+            lower = line.lower()
+            if lower.startswith(b"host:"):
+                raw_host = line
+                continue
+            raw_rest.extend(line)
+            if b"keep-alive" in lower:
+                keep_alive = True
+            elif b"range:" in lower:
+                range = types.Range.parse_header(line)
+            if line == b"\r\n":
+                break
+        assert raw_host, "No host: line in request"
+        return types.Request(path, keep_alive, range, raw_first, raw_host, raw_rest)
+
+    async def open_connection(self) -> Stream:
+        return await Stream.connect(
+            self.config.remote_host(),
+            self.config.remote_port(),
+            ssl=self.config.ssl() and (ssl_context() or True),
+        )
+
+    async def stream_head(self, local: Stream, remote: Stream) -> types.Head:
+        """Proxy the head of an HTTP request between remote and local,
+        returning it."""
+        head = bytearray()
+
+        line = await remote.readline()
+        protocol, status, *_ = line.split()
+        assert protocol.startswith(b"HTTP/1")  # test server uses http/1.0
+        check_status(status)
+        head.extend(line)
+
+        await local.write(line)
+
+        async for line in remote.lines():
+            head.extend(line)
+            local.tx.write(line)
+            if line == b"\r\n":
+                await local.tx.drain()
+                break
+
+        return types.Head.from_raw(head)
+
+    async def error(self, local: Stream, code: int = 400, msg: bytes = b"") -> None:
+        """Tell the client that something failed."""
+        await local.write(f"HTTP/1.1 {code}\r\n\r\n".encode())
+        if msg:
+            await local.write(msg)
+
+    @Ignore(ConnectionError, asyncio.TimeoutError)
+    async def handle_request(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        """Handle an incoming local connection, serving the requested resource
+        from the cache or proxying it."""
+
+        local = Stream(reader, writer)
+        del reader, writer
+
+        with Connection(local, remote=None).close_on_error() as connection:
+            request = await self.parse_request(local)
+
+            path = Path(request.cache_key())
+
+            # cache hit
+            if head := self.cache.get_head(path):
+                logger.debug(
+                    "Serving %s from cache (%s)", request.path.path, request.range
+                )
+                if not (range := request.range).empty():
+                    parsed = types.Head.from_raw(head)
+                    assert parsed.content_length
+                    range = range.expand(parsed.content_length)
+                    start, end, _ = range
+
+                    chunks = self.cache.get_body_chunk(path, start, end)
+
+                    head_lines = head.splitlines()[1:-1]
+                    del head
+                    head_lines = [h for h in head_lines if b"Content-Length" not in h]
+                    head_lines.insert(0, b"HTTP/1.1 206 Partial Content")
+
+                    head_lines.append(f"Content-Length: {end + 1 - start}".encode())
+                    head_lines.append(range.to_header().encode())
+                    head_lines.append(b"")
+                    head_lines.append(b"")
+                    await local.write(b"\r\n".join(head_lines))
+                else:
+                    await local.write(head)
+                    chunks = self.cache.get_body(path)
+
+                assert chunks
+                for chunk in chunks.data:
+                    await local.write(chunk)
+
+            # cache miss
+            else:
+                logger.debug("Proxying %s from remote", request.path.path)
+                with self.cache.insertion(path) as insertion:
+                    remote = await self.open_connection()
+                    connection.remote = remote
+                    raw = request.into_remote(
+                        self.config.remote_host(), self.config.remote_port()
+                    ).raw()
+                    await remote.write(raw)
+
+                    head, content_length, keep_alive = await self.stream_head(
+                        local, remote
+                    )
+                    insertion.save_head(Head(bytes(head)))
+
+                    buffer_bytes = 1024 * 1024 * 16  # 16 MiB for now
+                    buffer = types.Buffer.with_capacity(buffer_bytes)
+                    offset = 0
+                    read = 0
+                    finished = False
+
+                    while not finished:
+                        data = await remote.read(buffer_bytes)
+                        read += len(data)
+                        if not data:  # socket closed
+                            break
+                        local.tx.write(data)
+                        buffer.extend(data)
+                        del data
+
+                        finished = read == content_length
+
+                        if (
+                            local.tx.transport.get_write_buffer_size() >= buffer_bytes
+                            or finished
+                        ):
+                            await local.tx.drain()
+                            insertion.save_body_chunk(buffer.data(), offset)
+                            offset += buffer.contains
+                            buffer.clear()
+
+                    await remote.close()
+                    if not keep_alive:
+                        await local.close()
+
+                    # right now we just throw away partial requests. We *could* in
+                    # theory save them and try to assemble later, but that's
+                    # probably more hassle than it's worth.
+                    if read == content_length and request.range.empty():
+                        logger.debug(
+                            "Fetched whole record; finalising insertion %s", insertion
+                        )
+                        insertion.finalise()
+
+
+class ThreadedProxy:
+    """A proxy, running in a new asyncio loop inside a thread."""
+
+    def __init__(self, proxy: Proxy) -> None:
+        self.inner = proxy
+        loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(
+            target=lambda: loop.run_until_complete(proxy.block())
+        )
+        self.thread.start()
+        self.config = asyncio.run_coroutine_threadsafe(proxy.start(), loop).result()
+        self.loop = loop
+
+        # NOTE there is no race condition here: the thread calls .init() to get
+        # the config, so the DB is guaranteed to be in a known state.
+        self.cache = proxy.cache_factory()
+
+    def stop(self, block: bool = True):
+        self.loop.call_soon_threadsafe(lambda: self.inner.event.set())
+        if block:
+            self.thread.join()
+
+
+class ProcessProxy:
+    """A proxy, running in a new asyncio loop inside a process."""
+
+    def __init__(self, proxy: Proxy) -> None:
+        from multiprocessing import Process
+
+        self.inner = proxy
+        loop = asyncio.new_event_loop()
+        queue = multiprocessing.Queue(1)
+        self.proc = Process(
+            target=lambda: loop.run_until_complete(proxy.block_start(queue))
+        )
+        self.proc.start()
+        self.config = queue.get()
+
+        # NOTE there is no race condition here: the subprocess calls .init() to
+        # get the config, so the DB is guaranteed to be in a known state.
+        self.cache = proxy.cache_factory()
+
+    def stop(self, block: bool = True):
+        self.proc.terminate()
+        if block:
+            self.proc.join()

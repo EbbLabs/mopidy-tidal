@@ -15,9 +15,6 @@ jobs:
       matrix:
         versions:
           -
-            python: 3.11
-            mopidy: 3.3
-          -
             python: 3.12
             mopidy: 3.3
           -
@@ -26,9 +23,6 @@ jobs:
           -
             python: 3.14
             mopidy: 3.3
-          -
-            python: 3.11
-            mopidy: 3.4
           -
             python: 3.12
             mopidy: 3.4
