@@ -1,6 +1,5 @@
 import sqlite3
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
@@ -132,10 +131,6 @@ class ChunkedBuffer:
         assert sent == end - start, f"Sent {sent}, end={end}, start={start}"
 
     @classmethod
-    def from_dict(cls, data: dict[int, Bytes]) -> Self:
-        return cls(tuple(data.keys()), data.__getitem__)
-
-    @classmethod
     def from_db(cls, cur: sqlite3.Cursor, entry_id: EntryID, *offsets: int) -> Self:
         def get_chunk(start: int) -> Bytes:
             cur.execute(
@@ -144,70 +139,6 @@ class ChunkedBuffer:
             return cur.fetchone()[0]
 
         return cls(offsets, get_chunk)
-
-
-@dataclass
-class DictInsertion(Insertion):
-    head: Head | None = None
-    body: dict[int, Bytes] = field(default_factory=dict)
-    final: bool = False
-
-    def save_head(self, head: Head) -> None:
-        self.head = head
-
-    def save_body_chunk(self, data: Bytes, start: int) -> None:
-        assert start not in self.body, start
-        self.body[start] = data
-
-    def finalise(self) -> None:
-        self.final = True
-
-
-class DictCache(Cache[DictInsertion]):
-    """A cache using dicts to store the data.
-
-    This is not used at the moment, but was used to bootstrap up the cache in
-    development. Once it was stable the SQLite cache below was written to
-    replace it.
-
-    We could get rid of it, but maybe we should keep it until we're sure the
-    cache works in production.
-    """
-
-    def __init__(self) -> None:
-        self.heads = {}
-        self.bodies = defaultdict(dict)
-
-    def get_head(self, path: Path) -> Head | None:
-        return self.heads.get(path)
-
-    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
-        chunks = self.bodies[path]
-        if chunks:
-            data = ChunkedBuffer.from_dict(chunks).get_range(start, end)
-            total = sum(len(x) for x in chunks.values())
-            return Chunk(data, total)
-        else:
-            return None
-
-    def get_body(self, path: Path) -> Chunk | None:
-        chunks = self.bodies[path]
-        if chunks:
-            data = [chunks[x] for x in sorted(chunks)]
-            total = sum(len(x) for x in self.bodies[path].values())
-            return Chunk(iter(data), total)
-        else:
-            return None
-
-    @contextmanager
-    def insertion(self, path: Path) -> Iterator[DictInsertion]:
-        insertion = DictInsertion()
-
-        yield insertion
-
-        if insertion.head and insertion.final:
-            self.heads[path] = insertion.head
-            self.bodies[path] = insertion.body
 
 
 def entry_id() -> EntryID:

@@ -17,7 +17,6 @@ from pytest_httpserver import HTTPServer
 
 from mopidy_tidal.gstreamer_proxy.cache import (
     Cache,
-    DictCache,
     Head,
     Insertion,
     Path,
@@ -107,7 +106,6 @@ def remote(server: HTTPServer) -> Remote:
 def proxy(remote: Remote) -> Iterator[Proxy]:
     proxy = ProxyInstance(
         ProxyConfig.build(None, remote.server.url_for("/")),
-        # DictCache,
         lambda: SQLiteCache(sqlite3.connect(":memory:")),
     )
     instance = ThreadedProxy(proxy)
@@ -282,11 +280,6 @@ class TestBuffer:
 
 
 class CacheCases:
-    def case_dict(self) -> DictCache:
-        cache = DictCache()
-        cache.init()
-        return cache
-
     def case_sqlite(self) -> SQLiteCache:
         db = sqlite3.connect(":memory:")
         cache = SQLiteCache(db)
