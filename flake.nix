@@ -7,7 +7,6 @@
   };
 
   outputs = inputs @ {
-    self,
     nixpkgs,
     flake-parts,
     ...
@@ -15,12 +14,12 @@
     flake-parts.lib.mkFlake {inherit inputs;} {
       systems = nixpkgs.lib.systems.flakeExposed;
       perSystem = {
+        self',
         pkgs,
-        system,
         ...
       }: let
         pyProject = builtins.fromTOML (builtins.readFile ./pyproject.toml);
-        version = pyProject.project.version;
+        inherit (pyProject.project) version;
         python = pkgs.python313;
         buildInputs =
           [
@@ -51,7 +50,7 @@
           ]);
       in {
         devShells.default = pkgs.mkShell {
-          inherit buildInputs;
+          packages = buildInputs;
           env = {
             UV_PROJECT_ENVIRONMENT = ".direnv/venv";
             # libsoup_3 is broken, and why wouldn't you use curl?
@@ -63,27 +62,30 @@
             source $UV_PROJECT_ENVIRONMENT/bin/activate
           '';
         };
-        packages.default = pkgs.python3Packages.buildPythonApplication {
-          pname = "mopidy-tidal";
-          inherit version;
-          pyproject = true;
-          src = ./.;
-          build-system = [pkgs.python3Packages.uv-build];
-          nativeCheckInputs = with pkgs.python3Packages; [
-            pytestCheckHook
-            pytest-asyncio
-            pytest-cov # since default pytest invocation includes --cov
-            pytest-mock
-            pytest-httpserver
-            pytest-cases
-            trustme
-            httpx
-          ];
+        packages = {
+          default = self'.packages.mopidy-tidal;
+          mopidy-tidal = pkgs.python3Packages.buildPythonApplication {
+            pname = "mopidy-tidal";
+            inherit version;
+            pyproject = true;
+            src = ./.;
+            build-system = [pkgs.python3Packages.uv-build];
+            nativeCheckInputs = with pkgs.python3Packages; [
+              pytestCheckHook
+              pytest-asyncio
+              pytest-cov # since default pytest invocation includes --cov
+              pytest-mock
+              pytest-httpserver
+              pytest-cases
+              trustme
+              httpx
+            ];
 
-          dependencies = [
-            pkgs.mopidy
-            pkgs.python3Packages.tidalapi
-          ];
+            dependencies = [
+              pkgs.mopidy
+              pkgs.python3Packages.tidalapi
+            ];
+          };
         };
       };
     };
