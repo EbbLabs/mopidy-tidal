@@ -20,10 +20,10 @@
       }: let
         pyProject = builtins.fromTOML (builtins.readFile ./pyproject.toml);
         inherit (pyProject.project) version;
-        python = pkgs.python313;
+        python = pkgs.python3.withPackages (ps: [ps.gst-python ps.pygobject3]);
         buildInputs =
           [
-            (python.withPackages (ps: [ps.gst-python ps.pygobject3]))
+            python
           ]
           ++ (with pkgs; [
             # dev
