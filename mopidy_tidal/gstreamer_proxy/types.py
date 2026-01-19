@@ -1,3 +1,4 @@
+import urllib.parse
 from dataclasses import dataclass
 from typing import NamedTuple, Self
 
@@ -49,6 +50,29 @@ class Range(NamedTuple):
         return self == (None, None)
 
 
+@dataclass
+class Request:
+    """An HTTP request, minimally parsed."""
+
+    path: urllib.parse.ParseResultBytes
+    keep_alive: bool
+    range: Range
+    raw_first: bytes
+    raw_host: bytes
+    raw_rest: bytearray
+
+    def into_remote(self, remote_host: str, remote_port: int) -> Self:
+        """Transform this request to send it to the remote server."""
+        self.raw_host = f"Host: {remote_host}:{remote_port}\r\n".encode()
+        return self
+
+    def raw(self) -> bytes:
+        return self.raw_first + self.raw_host + self.raw_rest
+
+    def cache_key(self) -> bytes:
+        return self.path.path
+
+
 class Head(NamedTuple):
     raw: bytes | bytearray
     content_length: int | None
@@ -71,6 +95,16 @@ class Head(NamedTuple):
         keep_alive = True if b"connection: keep-alive" in lower else None
 
         return cls(raw, length, keep_alive)
+
+
+@dataclass
+class StatusError(Exception):
+    """Invalid status"""
+
+    status: int
+
+    def __repr__(self) -> str:
+        return f"StatusError({self.status})"
 
 
 @dataclass

@@ -24,7 +24,7 @@ import urllib.parse
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from functools import wraps
-from logging import basicConfig, getLogger
+from logging import getLogger
 from ssl import SSLContext
 from typing import AsyncIterator, Awaitable, Callable, Iterator, Self
 from urllib.parse import urlparse, urlunparse
@@ -124,29 +124,6 @@ class Connection:
             raise
 
 
-@dataclass
-class Request:
-    """An HTTP request, minimally parsed."""
-
-    path: urllib.parse.ParseResultBytes
-    keep_alive: bool
-    range: types.Range
-    raw_first: bytes
-    raw_host: bytes
-    raw_rest: bytearray
-
-    def into_remote(self, remote_host: str, remote_port: int) -> Self:
-        """Transform this request to send it to the remote server."""
-        self.raw_host = f"Host: {remote_host}:{remote_port}\r\n".encode()
-        return self
-
-    def raw(self) -> bytes:
-        return self.raw_first + self.raw_host + self.raw_rest
-
-    def cache_key(self) -> bytes:
-        return self.path.path
-
-
 def ssl_context() -> SSLContext | None:
     """SSL context to use for https.
 
@@ -155,22 +132,12 @@ def ssl_context() -> SSLContext | None:
     return None
 
 
-@dataclass
-class StatusError(Exception):
-    """Invalid status"""
-
-    status: int
-
-    def __repr__(self) -> str:
-        return f"StatusError({self.status})"
-
-
 def check_status(status: bytes | bytearray) -> None:
     val = int(status.decode())
     if 200 <= val <= 300:
         return None
     else:
-        raise StatusError(val)
+        raise types.StatusError(val)
 
 
 type CacheFactory[C] = Callable[[], C]
@@ -229,7 +196,7 @@ class Proxy[C: Cache]:
         logger.debug("Proxy config: %s", config)
         return config
 
-    async def parse_request(self, local: Stream) -> Request:
+    async def parse_request(self, local: Stream) -> types.Request:
         """Read enough of an HTTP connection to understand the request."""
         raw_rest = bytearray()
         raw_first = await local.readline()
@@ -253,7 +220,7 @@ class Proxy[C: Cache]:
             if line == b"\r\n":
                 break
         assert raw_host, "No host: line in request"
-        return Request(path, keep_alive, range, raw_first, raw_host, raw_rest)
+        return types.Request(path, keep_alive, range, raw_first, raw_host, raw_rest)
 
     async def open_connection(self) -> Stream:
         return await Stream.connect(
