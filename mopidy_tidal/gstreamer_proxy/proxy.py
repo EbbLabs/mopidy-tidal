@@ -334,13 +334,21 @@ class Proxy[C: Cache]:
                         buffer.extend(data)
                         del data
 
-                        finished = read == content_length
+                        finished = content_length is not None and read >= content_length
 
-                        if (
+                        # This rarely happens, since gstreamer is on localhost
+                        # an data is available to read as soon as we call
+                        # .write() above.  But if gstreamer *does* block, we're
+                        # better off blocking than running out of ram.
+                        gstreamer_buffer_full = (
                             local.tx.transport.get_write_buffer_size() >= buffer_bytes
-                            or finished
-                        ):
+                        )
+                        insertion_buffer_full = buffer.contains >= buffer_bytes
+
+                        if gstreamer_buffer_full or finished:
                             await local.tx.drain()
+
+                        if insertion_buffer_full or finished:
                             insertion.save_body_chunk(buffer.data(), offset)
                             offset += buffer.contains
                             buffer.clear()
