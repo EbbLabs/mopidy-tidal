@@ -57,14 +57,8 @@ class TidalBackend(ThreadingActor, backend.Backend):
 
     @property
     def playback_cache(self) -> ThreadedProxy | None:
-        path = (
-            Path(
-                self._tidal_config["playback_cache"]
-                and Extension.get_cache_dir(self._config)
-            )
-            / "playback.db"
-        )
-        if path:
+        if self._tidal_config["playback_cache"]:
+            path = Path(Extension.get_cache_dir(self._config)) / "playback.db"
             return mopidy_playback_cache(
                 path, self._tidal_config["playback_cache_max_entries"]
             )
