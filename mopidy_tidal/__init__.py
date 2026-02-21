@@ -40,6 +40,7 @@ class Extension(ext.Extension):
         )
         schema["playback_cache"] = config.Boolean(optional=True)
         schema["playback_cache_max_entries"] = config.Integer(optional=True, minimum=1)
+        schema["playback_cache_buffer_bytes"] = config.Integer(optional=True, minimum=1)
         return schema
 
     def setup(self, registry):

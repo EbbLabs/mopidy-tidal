@@ -7,7 +7,11 @@ from .proxy import Proxy, ProxyConfig, ThreadedProxy
 
 
 @functools.cache
-def mopidy_playback_cache(path: Path, max_entries: int | None = None) -> ThreadedProxy:
+def mopidy_playback_cache(
+    path: Path,
+    buffer_bytes: int,
+    max_entries: int | None,
+) -> ThreadedProxy:
     path.parent.mkdir(parents=True, exist_ok=True)
     proxy = Proxy(
         ProxyConfig.build(
@@ -15,6 +19,7 @@ def mopidy_playback_cache(path: Path, max_entries: int | None = None) -> Threade
             "https://lgf.audio.tidal.com/",
         ),
         lambda: SQLiteCache(sqlite3.connect(path), max_entries=max_entries),
+        buffer_bytes=buffer_bytes,
     )
     instance = ThreadedProxy(proxy)
 

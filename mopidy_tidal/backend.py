@@ -60,7 +60,9 @@ class TidalBackend(ThreadingActor, backend.Backend):
         if self._tidal_config["playback_cache"]:
             path = Path(Extension.get_cache_dir(self._config)) / "playback.db"
             return mopidy_playback_cache(
-                path, self._tidal_config["playback_cache_max_entries"]
+                path,
+                self._tidal_config["playback_cache_max_entries"],
+                self._tidal_config["playback_cache_buffer_bytes"],
             )
         else:
             return None

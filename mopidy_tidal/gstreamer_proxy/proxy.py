@@ -170,6 +170,7 @@ class Proxy[C: Cache]:
     cache_factory: CacheFactory[C]
     started: bool = False
     event: asyncio.Event = field(default_factory=asyncio.Event)
+    buffer_bytes: int = 1024 * 1024 * 16  # 16 MiB for now
 
     async def block(self) -> None:
         """Block as long as this server is running."""
@@ -319,14 +320,13 @@ class Proxy[C: Cache]:
                     )
                     insertion.save_head(Head(bytes(head)))
 
-                    buffer_bytes = 1024 * 1024 * 16  # 16 MiB for now
-                    buffer = types.Buffer.with_capacity(buffer_bytes)
+                    buffer = types.Buffer.with_capacity(self.buffer_bytes)
                     offset = 0
                     read = 0
                     finished = False
 
                     while not finished:
-                        data = await remote.read(buffer_bytes)
+                        data = await remote.read(self.buffer_bytes)
                         read += len(data)
                         if not data:  # socket closed
                             break
@@ -341,9 +341,10 @@ class Proxy[C: Cache]:
                         # .write() above.  But if gstreamer *does* block, we're
                         # better off blocking than running out of ram.
                         gstreamer_buffer_full = (
-                            local.tx.transport.get_write_buffer_size() >= buffer_bytes
+                            local.tx.transport.get_write_buffer_size()
+                            >= self.buffer_bytes
                         )
-                        insertion_buffer_full = buffer.contains >= buffer_bytes
+                        insertion_buffer_full = buffer.contains >= self.buffer_bytes
 
                         if gstreamer_buffer_full or finished:
                             await local.tx.drain()
