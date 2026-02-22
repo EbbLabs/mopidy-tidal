@@ -52,6 +52,59 @@ sudo pip3 install .
 sudo systemctl restart mopidy
 ```
 
+### Install / develop with nix
+
+If you are running nix, you can drop into a shell with everything ready to go
+using
+
+```shell
+nix develop
+```
+
+or, with `direnv` installed,
+
+```shell
+direnv allow
+```
+
+You should *not* attempt to install the `complete` group: instead nix is used to
+provide the needed non-python libraries (and a few extensions for manual and
+automated testing).  If you are not running any other mopidy on your system, the
+integration tests should pass.
+
+Mopidy-Tidal is in nixpkgs, but to use the latest git or a local checkout you
+can override to build directly from this flake.  Assuming you use flakes, the
+easiest approach is to add a new entry to `inputs`:
+
+```nix
+inputs.mopidy-tidal = {
+  url = "git+file:///home/USER/code/mopidy-tidal"; # or github:EbbLabs/mopidy-tidal
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+Then (making sure to pass `inputs` through) you can do something like:
+
+```nix
+  services.mopidy = let
+    system = pkgs.stdenv.hostPlatform.system;
+    mopidy-tidal = inputs.mopidy-tidal.outputs.packages.${system}.default;
+  in {
+    enable = true;
+    extensionPackages = with pkgs;
+      [mopidy-local mopidy-iris mopidy-mpd mopidy-mpris]
+      ++ [mopidy-tidal];
+    settings = {
+      local.media_dir = "~/Music/Library";
+      local.scan_follow_symlinks = true;
+      tidal.quality = "LOSSLESS";
+      tidal.playback_cache = true;
+    };
+  };
+```
+
+substituting for your own local configuration as appropriate.
+
 ## Dependencies
 
 ### Python
