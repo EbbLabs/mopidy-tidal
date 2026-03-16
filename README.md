@@ -52,6 +52,59 @@ sudo pip3 install .
 sudo systemctl restart mopidy
 ```
 
+### Install / develop with nix
+
+If you are running nix, you can drop into a shell with everything ready to go
+using
+
+```shell
+nix develop
+```
+
+or, with `direnv` installed,
+
+```shell
+direnv allow
+```
+
+You should *not* attempt to install the `complete` group: instead nix is used to
+provide the needed non-python libraries (and a few extensions for manual and
+automated testing).  If you are not running any other mopidy on your system, the
+integration tests should pass.
+
+Mopidy-Tidal is in nixpkgs, but to use the latest git or a local checkout you
+can override to build directly from this flake.  Assuming you use flakes, the
+easiest approach is to add a new entry to `inputs`:
+
+```nix
+inputs.mopidy-tidal = {
+  url = "git+file:///home/USER/code/mopidy-tidal"; # or github:EbbLabs/mopidy-tidal
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+Then (making sure to pass `inputs` through) you can do something like:
+
+```nix
+  services.mopidy = let
+    system = pkgs.stdenv.hostPlatform.system;
+    mopidy-tidal = inputs.mopidy-tidal.outputs.packages.${system}.default;
+  in {
+    enable = true;
+    extensionPackages = with pkgs;
+      [mopidy-local mopidy-iris mopidy-mpd mopidy-mpris]
+      ++ [mopidy-tidal];
+    settings = {
+      local.media_dir = "~/Music/Library";
+      local.scan_follow_symlinks = true;
+      tidal.quality = "LOSSLESS";
+      tidal.playback_cache = true;
+    };
+  };
+```
+
+substituting for your own local configuration as appropriate.
+
 ## Dependencies
 
 ### Python
@@ -113,13 +166,16 @@ configuration listed below in the respective configuration file and set the rele
 [tidal]
 enabled = true
 quality = LOSSLESS
-#playlist_cache_refresh_secs = 0
-#lazy = true
-#login_method = AUTO
-#auth_method = OAUTH
-#login_server_port = 8989
-#client_id =
-#client_secret =
+auth_method = OAUTH
+login_server_port = 8989
+lazy = false
+login_method = AUTO
+playlist_cache_refresh_secs = 0
+client_id =
+client_secret =
+playback_cache = false
+playback_cache_max_entries = 1024
+playback_cache_buffer_bytes = 16777216 # 16 MiB
 ```
 
 ### Plugin parameters
@@ -178,6 +234,15 @@ quality = LOSSLESS
     * `AUTO`/`HACK`: Mopidy will start as usual but the user will be prompted to complete the auth login flow by
       visiting a link. The link is provided as a dummy track and as a log message.
 * **client_id, _secret (Optional):**: Tidal API `client_id`, `client_secret` can be overridden by the user if necessary.
+* **playback_cache (Optional)**: Whether to enable a local playback cache. Only
+  supported when `auth_method` is `OAUTH`; ignored (with a warning) otherwise.
+  See below for discussion of the cache.
+* **playback_cache_max_entries (Optional)**: The maximum number of entries to
+  keep in the playback cache.  When this number is reached the least recently
+  played tracks will be evicted.  Set to empty (`playback_cache_max_entries=`) to
+  disable eviction.
+* **playback_cache_buffer_bytes (Optional)**: The size of the internal buffer
+  used by the streaming proxy (see below).
 
 ## Login
 
@@ -226,3 +291,32 @@ This PKCE flow also requires visiting an URL but requires an extra step to retur
    this is normal.
 5. Paste this URL into the web authentication page and click "Submit". You can now close the web page.
 6. Refresh your Mopidy frontend. You should now be able to browse as usual.
+
+## Caching
+
+Mopidy-Tidal tries to cache responses from Tidal to speed up requests.
+Additionally, when the playback cache is enabled, responses are streamed into a
+cache and proxied to gstreamer the first time a track is played; thereafter
+the data is served directly from the cache.  This caching is at the network
+layer, using a small proxy server shipped with Mopidy-Tidal; the server supports
+HTTP GET requests with or without the `Range: ` header (enabling seeking) and
+not much else.
+
+Proxying whilst streaming implies keeping a buffer.  This buffer is in addition
+to gstreamer's own playback buffer, and defaults to 16 MiB, which is small
+enough to add little to Mopidy's memory footprint on constrained devices like
+the raspberry pi, whilst being large enough to prevent stuttering in most cases.
+The goal is for the proxy to ship data through to gstreamer as fast as the
+latter can consume it and the network can supply it.  If you experience playback
+stuttering or have plenty of RAM, you might want to increase the buffer size.
+
+Be aware that at the time of writing the entire buffer is guaranteed to be
+filled (assuming the source data is large enough), and data will be persisted in
+chunks of this size.  If you subsequently decrease the buffer size and find that
+Mopidy-Tidal uses large amounts of ram when serving from the cache, delete (or
+empty) the cache database.
+
+The cache is backed by a Sqlite database.  If you open (or something else,
+e.g. another mopidy process, opens) this database and obtain a write lock, the
+cache will freeze or crash as Sqlite (at least as we use it) does not support
+concurrent writes.

@@ -29,6 +29,9 @@ def test_config_schema_has_correct_keys():
         "login_method",
         "login_server_port",
         "auth_method",
+        "playback_cache",
+        "playback_cache_max_entries",
+        "playback_cache_buffer_bytes",
     }
 
 

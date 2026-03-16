@@ -38,6 +38,9 @@ class Extension(ext.Extension):
         schema["login_server_port"] = config.Integer(
             optional=True, choices=range(8000, 9000)
         )
+        schema["playback_cache"] = config.Boolean(optional=True)
+        schema["playback_cache_max_entries"] = config.Integer(optional=True, minimum=1)
+        schema["playback_cache_buffer_bytes"] = config.Integer(optional=True, minimum=1)
         return schema
 
     def setup(self, registry):
