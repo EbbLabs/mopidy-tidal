@@ -5,6 +5,7 @@ import time
 from concurrent.futures import Future
 from pathlib import Path
 from typing import Optional, Union
+from urllib.parse import urlparse
 
 from mopidy import backend
 from pykka import ThreadingActor
@@ -60,7 +61,11 @@ class TidalBackend(ThreadingActor, backend.Backend):
     def playback_cache_for(self, uri: str) -> ThreadedProxy | None:
         def cache():
             if self._tidal_config["playback_cache"]:
+                track_url = self.session.track(uri.split(":")[-1]).get_url()
+                parsed = urlparse(track_url)
+
                 return mopidy_playback_cache(
+                    f"{parsed.scheme}://{parsed.netloc}",
                     Path(Extension.get_cache_dir(self._config)) / "playback.db",
                     self._tidal_config["playback_cache_max_entries"],
                     self._tidal_config["playback_cache_buffer_bytes"],
