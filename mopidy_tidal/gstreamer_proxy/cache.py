@@ -159,7 +159,7 @@ class ChunkedBuffer:
 
         other_chunks = (
             shift_out(self.chunks(x))
-            for x in self.offsets[
+            for x in offsets[
                 offsets.index(start_offset) + 1 : offsets.index(end_offset)
             ]
         )
