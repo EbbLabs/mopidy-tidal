@@ -38,7 +38,6 @@ from typing import (
     NamedTuple,
     NewType,
     Self,
-    Sequence,
     assert_never,
 )
 from uuid import uuid4
@@ -117,73 +116,54 @@ class Cache[I: Insertion](ABC):
         """Query for a (finalised) entry + Path for this TidalID."""
 
 
+class ReadChunk(NamedTuple):
+    id: int
+    from_: int
+    to_: int
+
+
 @dataclass
 class ChunkedBuffer:
     """A lazily resolved buffer over discrete chunks of data."""
 
-    offsets: Sequence[int]
-    chunks: Callable[[int], Bytes]
+    slices: list["StoredChunk"]
+    get_chunk: Callable[[ReadChunk], Bytes]
+
+    def get_closed_range(self, start: int, end: int) -> Iterator[Bytes]:
+        """Get a fully closed range from the backing data."""
+        return self.get_range(start, end + 1)
 
     def get_range(self, start: int, end: int) -> Iterator[Bytes]:
-        """Get a (half closed) range from the backing data."""
-        end += 1  # http uses closed ranges
-        offsets = sorted(self.offsets)
+        """Get a half-closed range from the backing data."""
 
-        start_offset = None
-        for offset in reversed(offsets):
-            if offset <= start:
-                start_offset = offset
-                break
-        if start_offset is None:
+        slices = []
+        for slice in self.slices:
+            if not slices:
+                if slice.start <= start and slice.end >= slice.start:
+                    slices.append(
+                        ReadChunk(
+                            slice.id, max(slice.start, start), min(slice.end, end)
+                        )
+                    )
+            else:
+                if slice.start < end:
+                    slices.append(ReadChunk(slice.id, 0, min(slice.end, end)))
+
+        if not slices:
             raise KeyError("Data does not contain start range")
 
-        end_offset = None
-        for offset in offsets:
-            if offset >= end:
-                break
-            else:
-                end_offset = offset
-
-        if end_offset is None:
-            end_offset = offsets[-1]
-
-        sent = 0
-
-        def shift_out(
-            chunk: Bytes, start: int | None = None, end: int | None = None
-        ) -> Bytes:
-            nonlocal sent
-            data = chunk[start:end]
-            sent += len(data)
-            return data
-
-        other_chunks = (
-            shift_out(self.chunks(x))
-            for x in offsets[
-                offsets.index(start_offset) + 1 : offsets.index(end_offset)
-            ]
-        )
-
-        assert start >= start_offset
-        assert end >= end_offset
-
-        yield shift_out(self.chunks(start_offset), start=start - start_offset)
-        yield from other_chunks
-        if start_offset != end_offset:
-            yield shift_out(self.chunks(end_offset), end=end - end_offset)
-
-        logger.debug("Sent %s", sent)
-        assert sent == end - start, f"Sent {sent}, end={end}, start={start}"
+        for slice in slices:
+            yield self.get_chunk(slice)
 
     @classmethod
-    def from_db(cls, cur: sqlite3.Cursor, entry_id: EntryID, *offsets: int) -> Self:
-        def get_chunk(start: int) -> Bytes:
-            cur.execute(
-                "SELECT data FROM body WHERE entry_id=? AND start=?", (entry_id, start)
-            )
-            return cur.fetchone()[0]
+    def from_db(cls, conn: sqlite3.Connection, metadata: "Metadata") -> Self:
+        def get_chunk(slice: ReadChunk) -> Bytes:
+            row, start, end = slice
+            with conn.blobopen("body", "data", row) as fp:
+                fp.seek(start)
+                return fp.read(end + 1 - start)
 
-        return cls(offsets, get_chunk)
+        return cls(metadata.ranges, get_chunk)
 
 
 def entry_id() -> EntryID:
@@ -216,6 +196,12 @@ class SQLiteInsertion(Insertion):
         self.final = True
 
 
+class StoredChunk(NamedTuple):
+    id: int
+    start: int
+    end: int
+
+
 class Metadata(NamedTuple):
     """Metadata about the particular DB layout of this record.
 
@@ -223,7 +209,7 @@ class Metadata(NamedTuple):
     request (which may be partial)."""
 
     total: int
-    offsets: list[int]
+    ranges: list[StoredChunk]
     entry_id: EntryID
 
     @classmethod
@@ -237,7 +223,8 @@ class Metadata(NamedTuple):
       LIMIT 1
     )
     SELECT
-      start
+      id
+      , start
       , len
       , body.entry_id
     FROM body
@@ -246,15 +233,15 @@ class Metadata(NamedTuple):
         """,
             (path,),
         )
-        offsets = []
+        ranges = []
         total = 0
         entry_id = None
-        for start, length, entry_id in cur.fetchall():
-            offsets.append(start)
+        for id, start, length, entry_id in cur.fetchall():
+            ranges.append(StoredChunk(id, start, start + length))
             total += length
 
         if entry_id:
-            return cls(total, offsets, entry_id)
+            return cls(total, ranges, entry_id)
         else:
             return None
 
@@ -379,23 +366,21 @@ RETURNING data
     def get_body(self, path: Path) -> Chunk | None:
         cur = self.conn.cursor()
         if metadata := Metadata.lookup(cur, path):
-            total, offsets, entry_id = metadata
             return Chunk(
-                data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
-                    0, total - 1
+                data=ChunkedBuffer.from_db(self.conn, metadata).get_range(
+                    0, metadata.total
                 ),
-                total=total,
+                total=metadata.total,
             )
 
     def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
         cur = self.conn.cursor()
         if metadata := Metadata.lookup(cur, path):
-            total, offsets, entry_id = metadata
             return Chunk(
-                data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
+                data=ChunkedBuffer.from_db(self.conn, metadata).get_closed_range(
                     start, end
                 ),
-                total=total,
+                total=metadata.total,
             )
 
     @contextmanager
