@@ -5,6 +5,7 @@ import time
 from concurrent.futures import Future
 from pathlib import Path
 from typing import Optional, Union
+from urllib.parse import urlparse
 
 from mopidy import backend
 from pykka import ThreadingActor
@@ -42,6 +43,8 @@ class TidalBackend(ThreadingActor, backend.Backend):
         self.session_file_path: Path = Path("")
         self.web_auth_server: WebAuthServer = WebAuthServer()
 
+        self._playback_cache: Lazy[ThreadedProxy | None] = Lazy()
+
         # Config parameters
         # Lazy: Connect lazily, i.e. login only when user starts browsing TIDAL directories
         self.lazy_connect: bool = False
@@ -55,17 +58,22 @@ class TidalBackend(ThreadingActor, backend.Backend):
         # login_server_port: Port to use for login HTTP server, eg. <host_ip>:<port>. Default <host_ip>:8989
         self.login_server_port: int = 8989
 
-    @property
-    def playback_cache(self) -> ThreadedProxy | None:
-        if self._tidal_config["playback_cache"]:
-            path = Path(Extension.get_cache_dir(self._config)) / "playback.db"
-            return mopidy_playback_cache(
-                path,
-                self._tidal_config["playback_cache_max_entries"],
-                self._tidal_config["playback_cache_buffer_bytes"],
-            )
-        else:
-            return None
+    def playback_cache_for(self, uri: str) -> ThreadedProxy | None:
+        def cache():
+            if self._tidal_config["playback_cache"]:
+                track_url = self.session.track(uri.split(":")[-1]).get_url()
+                parsed = urlparse(track_url)
+
+                return mopidy_playback_cache(
+                    f"{parsed.scheme}://{parsed.netloc}",
+                    Path(Extension.get_cache_dir(self._config)) / "playback.db",
+                    self._tidal_config["playback_cache_max_entries"],
+                    self._tidal_config["playback_cache_buffer_bytes"],
+                )
+            else:
+                return None
+
+        return self._playback_cache.get_or(cache)
 
     @property
     def session(self):
@@ -245,5 +253,5 @@ class TidalBackend(ThreadingActor, backend.Backend):
             return f"{self._login_url}" if self._login_url else None
 
     def on_stop(self) -> None:
-        if cache := self.playback_cache:
+        if cache := self._playback_cache.get_or_none():
             cache.stop()
