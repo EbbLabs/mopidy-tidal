@@ -60,7 +60,7 @@ class Entry(NamedTuple):
 
 @dataclass
 class Chunk:
-    data: Iterator[Bytes]
+    data: Iterator[BytesIO]
     total: int
 
 
@@ -369,9 +369,7 @@ RETURNING data
         cur = self.conn.cursor()
         if metadata := Metadata.lookup(cur, path):
             return Chunk(
-                data=ChunkedBuffer.from_db(self.conn, metadata).get_range(
-                    0, metadata.total
-                ),
+                data=ChunkedBuffer.from_db(self.conn, metadata).open_range(0),
                 total=metadata.total,
             )
 
@@ -379,9 +377,7 @@ RETURNING data
         cur = self.conn.cursor()
         if metadata := Metadata.lookup(cur, path):
             return Chunk(
-                data=ChunkedBuffer.from_db(self.conn, metadata).get_closed_range(
-                    start, end
-                ),
+                data=ChunkedBuffer.from_db(self.conn, metadata).open_range(start),
                 total=metadata.total,
             )
 

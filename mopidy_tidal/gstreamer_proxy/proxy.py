@@ -284,7 +284,7 @@ class Proxy[C: Cache]:
                     range = range.expand(parsed.content_length)
                     start, end, _ = range
 
-                    chunks = self.cache.get_body_chunk(path, start, end)
+                    files = self.cache.get_body_chunk(path, start, end)
 
                     head_lines = head.splitlines()[1:-1]
                     del head
@@ -298,11 +298,16 @@ class Proxy[C: Cache]:
                     await local.write(b"\r\n".join(head_lines))
                 else:
                     await local.write(head)
-                    chunks = self.cache.get_body(path)
+                    files = self.cache.get_body(path)
 
-                assert chunks
-                for chunk in chunks.data:
-                    await local.write(chunk)
+                assert files
+                for file in files.data:
+                    while True:
+                        data = file.read(self.buffer_bytes)
+                        if not data:
+                            break
+                        else:
+                            await local.write(data)
 
             # cache miss
             else:

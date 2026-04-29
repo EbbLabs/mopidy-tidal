@@ -306,7 +306,7 @@ class TestCache:
 
         lookup = cache.get_body(Path(b"foo"))
         assert lookup
-        body = b"".join(lookup.data)
+        body = b"".join(x.read() for x in lookup.data)
         assert body == b"bodydata"
 
     def test_a_long_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
@@ -324,7 +324,7 @@ class TestCache:
 
         lookup = cache.get_body(Path(b"foo"))
         assert lookup
-        body = b"".join(lookup.data)
+        body = b"".join(x.read() for x in lookup.data)
         assert body == b"".join(data)
 
     def test_an_unfinalised_record_cannot_be_retrieved(self, cache: Cache[Insertion]):
@@ -373,12 +373,12 @@ class TestCache:
         assert cache.get_head(Path(b"foo")) == b"head"
         lookup = cache.get_body(Path(b"foo"))
         assert lookup
-        body = b"".join(lookup.data)
+        body = b"".join(x.read() for x in lookup.data)
         assert body == b"bodydata"
 
         lookup = cache.get_body(Path(b"foo"))
         assert lookup
-        body = b"".join(lookup.data)
+        body = b"".join(x.read() for x in lookup.data)
         assert body == b"bodydata"
 
     @parametrize("n_concurrent", [2, 8, 24, 64, 128])
@@ -411,7 +411,7 @@ class TestCache:
 
             lookup = cache.get_body(path)
             assert lookup
-            body = b"".join(lookup.data)
+            body = b"".join(x.read() for x in lookup.data)
             assert body[:8] == b"bodydata"
             assert int.from_bytes(body[8:]) == id
 
