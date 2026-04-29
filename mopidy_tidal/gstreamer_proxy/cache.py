@@ -121,7 +121,7 @@ class Cache[I: Insertion](ABC):
 class ReadChunk(NamedTuple):
     id: int
     from_: int
-    to: int
+    # to: int
 
 
 @dataclass
@@ -137,19 +137,20 @@ class ChunkedBuffer:
 
     def get_range(self, start: int, end: int) -> Iterator[Bytes]:
         """Get a half-closed range from the backing data."""
+        for fp in self.open_range(start):
+            yield fp.read(end)
+            end -= fp.tell()
+            if not end:
+                break
 
+    def open_range(self, start: int) -> Iterator[BytesIO]:
         slices: list[ReadChunk] = []
         for slice in self.slices:
             if not slices:
                 if slice.start <= start and slice.end >= slice.start:
-                    slices.append(
-                        ReadChunk(
-                            slice.id, max(slice.start, start), min(slice.end, end)
-                        )
-                    )
+                    slices.append(ReadChunk(slice.id, max(slice.start, start)))
             else:
-                if slice.start < end:
-                    slices.append(ReadChunk(slice.id, 0, min(slice.end, end)))
+                slices.append(ReadChunk(slice.id, 0))
 
         if not slices:
             raise KeyError("Data does not contain start range")
@@ -157,7 +158,7 @@ class ChunkedBuffer:
         for slice in slices:
             with self.get_chunk(slice.id) as fp:
                 fp.seek(slice.from_)
-                yield fp.read(slice.to + 1 - start)
+                yield fp
 
     @classmethod
     def from_db(cls, conn: sqlite3.Connection, metadata: "Metadata") -> Self:
