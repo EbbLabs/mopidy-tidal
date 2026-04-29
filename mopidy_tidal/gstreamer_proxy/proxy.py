@@ -104,6 +104,9 @@ class Stream:
         while True:
             yield await self.readline(timeout)
 
+    def writer_buffered(self) -> int:
+        return self.tx.transport.get_write_buffer_size()
+
 
 @dataclass
 class Connection:
@@ -309,8 +312,10 @@ class Proxy[C: Cache]:
                             logger.debug("No more data to send")
                             break
                         else:
-                            await local.write(data)
                             logger.debug("writing cached data")
+                            local.tx.write(data)
+                            if local.writer_buffered() >= self.buffer_bytes:
+                                await local.tx.drain()
 
             # cache miss
             else:
