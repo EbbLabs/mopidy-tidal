@@ -147,8 +147,8 @@ class ChunkedBuffer:
         slices: list[ReadChunk] = []
         for slice in self.slices:
             if not slices:
-                if slice.start <= start and slice.end >= slice.start:
-                    slices.append(ReadChunk(slice.id, max(slice.start, start)))
+                if slice.end > start:
+                    slices.append(ReadChunk(slice.id, start - slice.start))
             else:
                 slices.append(ReadChunk(slice.id, 0))
 
