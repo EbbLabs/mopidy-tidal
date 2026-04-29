@@ -117,7 +117,7 @@ class Connection:
         try:
             yield self
         except Exception:
-            logger.warning("Errored, closing connection")
+            logger.exception("Errored, closing connection")
             self.local.tx.close()
             if self.remote:
                 self.remote.tx.close()
@@ -303,11 +303,14 @@ class Proxy[C: Cache]:
                 assert files
                 for file in files.data:
                     while True:
+                        logger.debug("Reading cached data")
                         data = file.read(self.buffer_bytes)
                         if not data:
+                            logger.debug("No more data to send")
                             break
                         else:
                             await local.write(data)
+                            logger.debug("writing cached data")
 
             # cache miss
             else:
@@ -371,6 +374,8 @@ class Proxy[C: Cache]:
                             "Fetched whole record; finalising insertion %s", insertion
                         )
                         insertion.finalise()
+
+        logger.debug("Nothing more to do; handled connection")
 
 
 class ThreadedProxy:
