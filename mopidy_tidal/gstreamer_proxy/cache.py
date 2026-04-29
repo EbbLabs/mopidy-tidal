@@ -71,7 +71,7 @@ class Insertion(ABC):
     entire head before being sure how to handle the request."""
 
     @abstractmethod
-    def save_head(self, head: Head) -> None:
+    def save_head(self, head: Head, content_length: int) -> None:
         """Save the head for the given path."""
 
     @abstractmethod
@@ -177,22 +177,30 @@ def entry_id() -> EntryID:
 class SQLiteInsertion(Insertion):
     """An unfinialised insertion into a cache backed by sqlite."""
 
-    cur: sqlite3.Cursor
+    conn: sqlite3.Connection
     path: Path
     final: bool = False
     entry_id: EntryID = field(default_factory=entry_id)
+    row: int | None = None
 
-    def save_head(self, head: Head) -> None:
-        self.cur.execute(
+    def save_head(self, head: Head, content_length: int) -> None:
+        self.conn.execute(
             "INSERT INTO head (entry_id, path, data) VALUES (?, ?, ?)",
             (self.entry_id, self.path, head),
         )
+        self.row = self.conn.execute(
+            "INSERT INTO body (entry_id, path, start, data, len) VALUES (?, ?, 0, zeroblob(?), ?) RETURNING id",
+            (self.entry_id, self.path, content_length, content_length),
+        ).fetchone()[0]
 
     def save_body_chunk(self, data: Bytes, start: int) -> None:
-        self.cur.execute(
-            "INSERT INTO body (entry_id, path, start, data, len) VALUES (?, ?, ?, ?, ?)",
-            (self.entry_id, self.path, start, data, len(data)),
-        )
+        with self.writer() as fp:
+            fp.seek(start)
+            fp.write(data)
+
+    def writer(self) -> sqlite3.Blob:
+        assert self.row, "Writer called before .save_head()"
+        return self.conn.blobopen("body", "data", self.row)
 
     def finalise(self) -> None:
         self.final = True
@@ -386,7 +394,7 @@ RETURNING data
         with self.conn as conn:
             cur = conn.cursor()
 
-            insertion = SQLiteInsertion(cur, path)
+            insertion = SQLiteInsertion(conn, path)
             yield insertion
 
             if insertion.final:

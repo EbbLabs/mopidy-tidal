@@ -297,7 +297,7 @@ class TestCache:
 
     def test_a_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
         with cache.insertion(Path(b"foo")) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 8)
             insertion.save_body_chunk(b"body", 0)
             insertion.save_body_chunk(b"data", 4)
             insertion.finalise()
@@ -313,7 +313,7 @@ class TestCache:
         data = [f"body-{i}".encode() for i in range(128)]
 
         with cache.insertion(Path(b"foo")) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), sum(len(x) for x in data))
             last = 0
             for chunk in data:
                 insertion.save_body_chunk(chunk, last)
@@ -329,7 +329,7 @@ class TestCache:
 
     def test_an_unfinalised_record_cannot_be_retrieved(self, cache: Cache[Insertion]):
         with cache.insertion(Path(b"foo")) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 8)
             insertion.save_body_chunk(b"body", 0)
             insertion.save_body_chunk(b"data", 4)
 
@@ -359,7 +359,7 @@ class TestCache:
         async def insert():
             async with semaphore:
                 with cache.insertion(Path(b"foo")) as insertion:
-                    insertion.save_head(Head(b"head"))
+                    insertion.save_head(Head(b"head"), 8)
                     await asyncio.sleep(0)
                     insertion.save_body_chunk(b"body", 0)
                     await asyncio.sleep(0)
@@ -391,7 +391,7 @@ class TestCache:
             async with semaphore:
                 with cache.insertion(Path(f"foo-{id}".encode())) as insertion:
                     await asyncio.sleep(0)
-                    insertion.save_head(Head(f"head-{id}".encode()))
+                    insertion.save_head(Head(f"head-{id}".encode()), 16)
                     await asyncio.sleep(0)
                     insertion.save_body_chunk(b"body", 0)
                     await asyncio.sleep(0)
@@ -433,7 +433,7 @@ class TestSQLiteCache:
             async with semaphore:
                 with cache.insertion(Path(f"foo-{id}".encode())) as insertion:
                     await asyncio.sleep(0)
-                    insertion.save_head(Head(f"head-{id}".encode()))
+                    insertion.save_head(Head(f"head-{id}".encode()), 16)
                     await asyncio.sleep(0)
                     insertion.save_body_chunk(b"body", 0)
                     await asyncio.sleep(0)
@@ -468,7 +468,7 @@ class TestSQLiteCache:
             async with semaphore:
                 with cache.insertion(Path(f"foo-{id}".encode())) as insertion:
                     await asyncio.sleep(0)
-                    insertion.save_head(Head(f"head-{id}".encode()))
+                    insertion.save_head(Head(f"head-{id}".encode()), 16)
                     await asyncio.sleep(0)
                     insertion.save_body_chunk(b"body", 0)
                     await asyncio.sleep(0)
@@ -493,7 +493,7 @@ class TestSQLiteCache:
         cache.init()
 
         with cache.insertion(Path(b"foo")) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 8)
             insertion.save_body_chunk(b"body", 0)
             insertion.save_body_chunk(b"data", 4)
             assert conn.execute("select count(*) from head").fetchone()[0] == 1
@@ -516,7 +516,7 @@ class TestSQLiteCache:
         cache.init()
 
         with cache.insertion(Path(b"foo")) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 8)
             insertion.save_body_chunk(b"body", 0)
             insertion.save_body_chunk(b"data", 4)
             assert conn.execute("select count(*) from head").fetchone()[0] == 1
@@ -544,7 +544,7 @@ class TestSQLiteCache:
         cache.init()
 
         with cache.insertion(Path(b"foo")) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 4)
             insertion.save_body_chunk(b"body", 0)
             insertion.finalise()
 
@@ -567,7 +567,7 @@ class TestSQLiteCache:
 
         for i in range(4):
             with cache.insertion(Path(f"foo-{i}".encode())) as insertion:
-                insertion.save_head(Head(b"head"))
+                insertion.save_head(Head(b"head"), 4)
                 insertion.save_body_chunk(b"body", 0)
                 insertion.finalise()
 
@@ -585,7 +585,7 @@ class TestSQLiteCache:
 
         for key in keys:
             with cache.insertion(key) as insertion:
-                insertion.save_head(Head(b"head"))
+                insertion.save_head(Head(b"head"), 4)
                 insertion.save_body_chunk(b"body", 0)
                 insertion.finalise()
 
@@ -608,7 +608,7 @@ class TestSQLiteCache:
 
         for key in keys[:3]:
             with cache.insertion(key) as insertion:
-                insertion.save_head(Head(b"head"))
+                insertion.save_head(Head(b"head"), 4)
                 insertion.save_body_chunk(b"body", 0)
                 insertion.finalise()
 
@@ -618,7 +618,7 @@ class TestSQLiteCache:
 
         for key in keys[3:]:
             with cache.insertion(key) as insertion:
-                insertion.save_head(Head(b"head"))
+                insertion.save_head(Head(b"head"), 4)
                 insertion.save_body_chunk(b"body", 0)
                 insertion.finalise()
 
@@ -664,7 +664,7 @@ class TestPathCache:
 
         cache.insert_path(TidalID("tidal:track:0:0:0"), path)
         with cache.insertion(path) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 4)
             insertion.save_body_chunk(b"body", 0)
 
             assert not cache.lookup_entry(TidalID("tidal:track:0:0:0"))
@@ -678,7 +678,7 @@ class TestPathCache:
 
         cache.insert_path(TidalID("tidal:track:0:0:0"), path)
         with cache.insertion(path) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 4)
             insertion.save_body_chunk(b"body", 0)
             insertion.finalise()
 
@@ -696,14 +696,14 @@ class TestPathCache:
 
         cache.insert_path(TidalID("tidal:track:0:0:0"), path)
         with cache.insertion(path) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 4)
             insertion.save_body_chunk(b"body", 0)
             insertion.finalise()
 
         assert cache.lookup_entry(TidalID("tidal:track:0:0:0"))
 
         with cache.insertion(Path("/bar/baz")) as insertion:
-            insertion.save_head(Head(b"head"))
+            insertion.save_head(Head(b"head"), 4)
             insertion.save_body_chunk(b"body", 0)
             insertion.finalise()
 

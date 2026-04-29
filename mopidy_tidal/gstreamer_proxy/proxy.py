@@ -323,7 +323,7 @@ class Proxy[C: Cache]:
                     head, content_length, keep_alive = await self.stream_head(
                         local, remote
                     )
-                    insertion.save_head(Head(bytes(head)))
+                    insertion.save_head(Head(bytes(head)), content_length)
 
                     buffer = types.Buffer.with_capacity(self.buffer_bytes)
                     offset = 0
