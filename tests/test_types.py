@@ -31,3 +31,6 @@ class TestLazy:
 
     def test_get_or_none_elides_inner_optionals(self):
         assert types.Lazy(inner=None).get_or_none() is None
+
+    def test_get_or_can_store_none(self):
+        assert types.Lazy().get_or(lambda: None) is None
