@@ -31,6 +31,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
+from io import BytesIO
 from logging import getLogger
 from typing import (
     Callable,
@@ -39,6 +40,7 @@ from typing import (
     NewType,
     Self,
     assert_never,
+    cast,
 )
 from uuid import uuid4
 
@@ -119,7 +121,7 @@ class Cache[I: Insertion](ABC):
 class ReadChunk(NamedTuple):
     id: int
     from_: int
-    to_: int
+    to: int
 
 
 @dataclass
@@ -127,7 +129,7 @@ class ChunkedBuffer:
     """A lazily resolved buffer over discrete chunks of data."""
 
     slices: list["StoredChunk"]
-    get_chunk: Callable[[ReadChunk], Bytes]
+    get_chunk: Callable[[int], BytesIO]
 
     def get_closed_range(self, start: int, end: int) -> Iterator[Bytes]:
         """Get a fully closed range from the backing data."""
@@ -136,7 +138,7 @@ class ChunkedBuffer:
     def get_range(self, start: int, end: int) -> Iterator[Bytes]:
         """Get a half-closed range from the backing data."""
 
-        slices = []
+        slices: list[ReadChunk] = []
         for slice in self.slices:
             if not slices:
                 if slice.start <= start and slice.end >= slice.start:
@@ -153,15 +155,14 @@ class ChunkedBuffer:
             raise KeyError("Data does not contain start range")
 
         for slice in slices:
-            yield self.get_chunk(slice)
+            with self.get_chunk(slice.id) as fp:
+                fp.seek(slice.from_)
+                yield fp.read(slice.to + 1 - start)
 
     @classmethod
     def from_db(cls, conn: sqlite3.Connection, metadata: "Metadata") -> Self:
-        def get_chunk(slice: ReadChunk) -> Bytes:
-            row, start, end = slice
-            with conn.blobopen("body", "data", row) as fp:
-                fp.seek(start)
-                return fp.read(end + 1 - start)
+        def get_chunk(row: int) -> BytesIO:
+            return cast(BytesIO, conn.blobopen("body", "data", row))
 
         return cls(metadata.ranges, get_chunk)
 
