@@ -451,7 +451,10 @@ class TestSQLiteCache:
         conn = sqlite3.connect(tmp_path / "foo.db")
 
         assert conn.execute("select count(*) from head").fetchone()[0] == 1
-        assert conn.execute("select count(*) from body").fetchone()[0] == 3
+        assert conn.execute("select count(*), is_final from body").fetchone() == (
+            1,
+            True,
+        )
 
     @parametrize("n_concurrent", [1, 2, 8, 24, 64, 128])
     async def test_incomplete_insertion_do_not_prevent_complete_insertions_from_persisting_on_the_conn(
@@ -482,7 +485,10 @@ class TestSQLiteCache:
         await asyncio.gather(*(insert(i) for i in range(128)))
 
         assert conn.execute("select count(*) from head").fetchone()[0] == 1
-        assert conn.execute("select count(*) from body").fetchone()[0] == 3
+        assert conn.execute("select count(*), is_final from body").fetchone() == (
+            1,
+            True,
+        )
 
     async def test_incomplete_insertion_is_not_left_in_cache(
         self, tmp_path: pathlib.Path
@@ -497,7 +503,10 @@ class TestSQLiteCache:
             insertion.save_body_chunk(b"body", 0)
             insertion.save_body_chunk(b"data", 4)
             assert conn.execute("select count(*) from head").fetchone()[0] == 1
-            assert conn.execute("select count(*) from body").fetchone()[0] == 2
+            assert conn.execute("select count(*), is_final from body").fetchone() == (
+                1,
+                False,
+            )
 
         del cache, conn
 
@@ -520,7 +529,10 @@ class TestSQLiteCache:
             insertion.save_body_chunk(b"body", 0)
             insertion.save_body_chunk(b"data", 4)
             assert conn.execute("select count(*) from head").fetchone()[0] == 1
-            assert conn.execute("select count(*) from body").fetchone()[0] == 2
+            assert conn.execute("select count(*), is_final from body").fetchone() == (
+                1,
+                False,
+            )
 
         assert conn.execute("select count(*) from head").fetchone()[0] == 0
         assert conn.execute("select count(*) from body").fetchone()[0] == 0
