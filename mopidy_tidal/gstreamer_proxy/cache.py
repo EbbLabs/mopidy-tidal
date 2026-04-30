@@ -44,7 +44,7 @@ from uuid import uuid4
 
 logger = getLogger()
 
-Bytes = bytes | bytearray
+Bytes = bytes | bytearray | memoryview
 Head = NewType("Head", bytes)
 Path = NewType("Path", bytes)
 TidalID = NewType("TidalID", str)

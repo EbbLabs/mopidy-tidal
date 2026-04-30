@@ -331,6 +331,7 @@ class Proxy:
                     head, content_length, keep_alive = await self.stream_head(
                         local, remote
                     )
+                    assert content_length
                     insertion.save_head(Head(bytes(head)), content_length)
 
                     buffer = types.Buffer.with_capacity(self.buffer_bytes)
