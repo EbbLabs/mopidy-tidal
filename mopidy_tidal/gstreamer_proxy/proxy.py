@@ -335,38 +335,34 @@ class Proxy:
                     insertion.save_head(Head(bytes(head)), content_length)
 
                     buffer = types.Buffer.with_capacity(self.buffer_bytes)
-                    offset = 0
                     read = 0
                     finished = False
 
-                    while not finished:
-                        data = await remote.read(self.buffer_bytes)
-                        read += len(data)
-                        if not data:  # socket closed
-                            break
-                        local.tx.write(data)
-                        buffer.extend(data)
-                        del data
+                    with insertion.writer() as cache_writer:
+                        while not finished:
+                            data = await remote.read(self.buffer_bytes)
+                            read += len(data)
+                            if not data:  # socket closed
+                                break
+                            local.tx.write(data)
+                            buffer.extend(data)
+                            del data
 
-                        finished = content_length is not None and read >= content_length
+                            finished = content_length is not None and read >= content_length
 
-                        # This rarely happens, since gstreamer is on localhost
-                        # an data is available to read as soon as we call
-                        # .write() above.  But if gstreamer *does* block, we're
-                        # better off blocking than running out of ram.
-                        gstreamer_buffer_full = (
-                            local.tx.transport.get_write_buffer_size()
-                            >= self.buffer_bytes
-                        )
-                        insertion_buffer_full = buffer.contains >= self.buffer_bytes
+                            # This rarely happens, since gstreamer is on localhost
+                            # and data is available to read as soon as we call
+                            # .write() above.  But if gstreamer *does* block, we're
+                            # better off blocking than running out of ram.
+                            gstreamer_buffer_full = local.writer_buffered() >= self.buffer_bytes
+                            insertion_buffer_full = buffer.contains >= self.buffer_bytes
 
-                        if gstreamer_buffer_full or finished:
-                            await local.tx.drain()
+                            if gstreamer_buffer_full or finished:
+                                await local.tx.drain()
 
-                        if insertion_buffer_full or finished:
-                            insertion.save_body_chunk(buffer.data(), offset)
-                            offset += buffer.contains
-                            buffer.clear()
+                            if insertion_buffer_full or finished:
+                                cache_writer.write(buffer.data())
+                                buffer.clear()
 
                     await remote.close()
                     if not keep_alive:
