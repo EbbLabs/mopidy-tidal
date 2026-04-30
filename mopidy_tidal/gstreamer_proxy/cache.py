@@ -7,7 +7,7 @@ calling code is expected to do something like:
 ```python
 with cache.insertion(path) as insertion:
    ...
-   insertion.save_head(head)
+   insertion.save_head(head, content_length)
    ...
    insertion.save_body_chunk(data, start)
    ...
@@ -58,7 +58,7 @@ class Entry(NamedTuple):
 
 @dataclass
 class Chunk:
-    data: Iterator[BytesIO]
+    data: Iterator[sqlite3.Blob]
     total: int
 
 
