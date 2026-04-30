@@ -5,6 +5,7 @@ import time
 from concurrent.futures import Future
 from pathlib import Path
 from typing import Optional, Union
+from urllib.parse import urlparse
 
 from mopidy import backend
 from pykka import ThreadingActor
@@ -14,6 +15,7 @@ from tidalapi import __version__ as tidalapi_ver
 from mopidy_tidal import Extension, context, library, playback, playlists
 from mopidy_tidal import __version__ as mopidy_tidal_ver
 from mopidy_tidal.gstreamer_proxy import ThreadedProxy, mopidy_playback_cache
+from mopidy_tidal.types import Lazy
 from mopidy_tidal.web_auth_server import WebAuthServer
 
 logger = logging.getLogger(__name__)
@@ -33,7 +35,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
         self.playlists = playlists.TidalPlaylistsProvider(backend=self)
 
         # Session parameters
-        self._active_session: Optional[Session] = None
+        self._active_session: Lazy[Session] = Lazy()
         self._logged_in: bool = False
         self.uri_schemes: tuple[str] = ("tidal",)
         self._login_future: Optional[Future] = None
@@ -41,6 +43,8 @@ class TidalBackend(ThreadingActor, backend.Backend):
         self.data_dir: Path = Path(Extension.get_data_dir(self._config))
         self.session_file_path: Path = Path("")
         self.web_auth_server: WebAuthServer = WebAuthServer()
+
+        self._playback_cache: Lazy[ThreadedProxy | None] = Lazy()
 
         # Config parameters
         # Lazy: Connect lazily, i.e. login only when user starts browsing TIDAL directories
@@ -55,36 +59,43 @@ class TidalBackend(ThreadingActor, backend.Backend):
         # login_server_port: Port to use for login HTTP server, eg. <host_ip>:<port>. Default <host_ip>:8989
         self.login_server_port: int = 8989
 
-    @property
-    def playback_cache(self) -> ThreadedProxy | None:
-        if self._tidal_config["playback_cache"]:
-            path = Path(Extension.get_cache_dir(self._config)) / "playback.db"
-            return mopidy_playback_cache(
-                path,
-                self._tidal_config["playback_cache_max_entries"],
-                self._tidal_config["playback_cache_buffer_bytes"],
-            )
-        else:
-            return None
+    def playback_cache_for(self, uri: str) -> ThreadedProxy | None:
+        def cache():
+            if self._tidal_config["playback_cache"]:
+                track_url = self.session.track(uri.split(":")[-1]).get_url()
+                parsed = urlparse(track_url)
+
+                return mopidy_playback_cache(
+                    f"{parsed.scheme}://{parsed.netloc}",
+                    Path(Extension.get_cache_dir(self._config)) / "playback.db",
+                    self._tidal_config["playback_cache_max_entries"],
+                    self._tidal_config["playback_cache_buffer_bytes"],
+                )
+            else:
+                return None
+
+        return self._playback_cache.get_or(cache)
 
     @property
-    def session(self):
+    def session(self) -> Session:
         if not self.logged_in:
             self._login()
-        return self._active_session
+        return self._active_session.get()
 
     @property
-    def logged_in(self):
+    def logged_in(self) -> bool:
         if not self._logged_in:
-            if self._active_session.load_session_from_file(self.session_file_path):
+            if self._active_session.get().load_session_from_file(
+                self.session_file_path
+            ):
                 logger.info("Loaded TIDAL session from file %s", self.session_file_path)
                 self._logged_in = self.session_valid
         return self._logged_in
 
     @property
-    def session_valid(self):
+    def session_valid(self) -> bool:
         # Returns true when session is logged in and valid
-        return self._active_session.check_login()
+        return self._active_session.get().check_login()
 
     def on_start(self):
         logger.info("Mopidy-Tidal version: v%s", mopidy_tidal_ver)
@@ -129,13 +140,13 @@ class TidalBackend(ThreadingActor, backend.Backend):
         else:
             logger.info("Using default client id & client secret from python-tidal")
 
-        self._active_session = Session(config)
+        self._active_session.set(Session(config))
         if not self.lazy_connect:
             self._login()
 
     def _login(self):
         """Load session at startup or create a new session"""
-        if self._active_session.load_session_from_file(self.session_file_path):
+        if self._active_session.get().load_session_from_file(self.session_file_path):
             logger.info(
                 "Loaded existing TIDAL session from file %s...", self.session_file_path
             )
@@ -143,7 +154,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
             if not self.login_server_port:
                 # A. Default login, user must find login URL in Mopidy log
                 logger.info("Creating new session (OAuth)...")
-                self._active_session.login_oauth_simple(fn_print=logger.info)
+                self._active_session.get().login_oauth_simple(fn_print=logger.info)
             else:
                 # B. Interactive login, user must perform login using web auth
                 logger.info(
@@ -152,7 +163,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
                 )
                 if self.pkce_enabled:
                     # PKCE Login
-                    login_url = self._active_session.pkce_login_url()
+                    login_url = self._active_session.get().pkce_login_url()
                     logger.info(
                         "Please visit 'http://localhost:%s' to authenticate",
                         self.login_server_port,
@@ -165,6 +176,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
                 else:
                     # OAuth login
                     login_url = self.login_url
+                    assert login_url
                     logger.info(
                         "Please visit 'http://localhost:%s' or '%s' to authenticate",
                         self.login_server_port,
@@ -198,10 +210,10 @@ class TidalBackend(ThreadingActor, backend.Backend):
             try:
                 # Query for auth tokens
                 json: dict[str, Union[str, int]] = (
-                    self._active_session.pkce_get_auth_token(url_redirect)
+                    self._active_session.get().pkce_get_auth_token(url_redirect)
                 )
                 # Parse and set tokens.
-                self._active_session.process_auth_token(json, is_pkce_token=True)
+                self._active_session.get().process_auth_token(json, is_pkce_token=True)
                 self._logged_in = True
             except Exception:
                 raise ValueError("Response code is required for PKCE login!")
@@ -213,7 +225,7 @@ class TidalBackend(ThreadingActor, backend.Backend):
         if self.session_valid:
             # Only store current session if valid
             logger.info("TIDAL Login OK")
-            self._active_session.save_session_to_file(self.session_file_path)
+            self._active_session.get().save_session_to_file(self.session_file_path)
             self._logged_in = True
         else:
             logger.error("TIDAL Login Failed")
@@ -229,13 +241,13 @@ class TidalBackend(ThreadingActor, backend.Backend):
         """Start a new login sequence (if not active) and get the latest login URL"""
         if not self.pkce_enabled:
             if not self._logged_in and not self.logging_in:
-                login_url, self._login_future = self._active_session.login_oauth()
+                login_url, self._login_future = self._active_session.get().login_oauth()
                 self._login_future.add_done_callback(lambda *_: self._complete_login())
                 self._login_url = login_url.verification_uri_complete
             return f"https://{self._login_url}" if self._login_url else None
         else:
             if not self._logged_in and not self.web_auth_server.is_daemon_running:
-                login_url = self._active_session.pkce_login_url()
+                login_url = self._active_session.get().pkce_login_url()
                 self._login_url = "http://localhost:{}".format(self.login_server_port)
                 # Enable web server for interactive login + callback on form Submit
                 self.web_auth_server.set_callback(self._web_auth_callback)
@@ -245,5 +257,5 @@ class TidalBackend(ThreadingActor, backend.Backend):
             return f"{self._login_url}" if self._login_url else None
 
     def on_stop(self) -> None:
-        if cache := self.playback_cache:
+        if cache := self._playback_cache.get_or_none():
             cache.stop()
