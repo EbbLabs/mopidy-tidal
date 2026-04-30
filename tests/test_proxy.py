@@ -16,9 +16,7 @@ from pytest_cases import fixture, parametrize, parametrize_with_cases
 from pytest_httpserver import HTTPServer
 
 from mopidy_tidal.gstreamer_proxy.cache import (
-    Cache,
     Head,
-    Insertion,
     Path,
     SQLiteCache,
     TidalID,
@@ -279,23 +277,22 @@ class TestBuffer:
         assert buffer.data() == b"67890"
 
 
-class CacheCases:
-    def case_sqlite(self) -> SQLiteCache:
-        db = sqlite3.connect(":memory:")
-        cache = SQLiteCache(db)
-        cache.init()
-        return cache
+@fixture()
+def cache() -> SQLiteCache:
+    db = sqlite3.connect(":memory:")
+    cache = SQLiteCache(db)
+    cache.init()
+    return cache
 
 
-@parametrize_with_cases("cache", cases=CacheCases)
 class TestCache:
-    def test_an_empty_cache_has_no_heads(self, cache: Cache):
+    def test_an_empty_cache_has_no_heads(self, cache: SQLiteCache):
         assert not cache.get_head(Path(b"foo"))
 
-    def test_an_empty_cache_has_no_bodies(self, cache: Cache):
+    def test_an_empty_cache_has_no_bodies(self, cache: SQLiteCache):
         assert not cache.get_body(Path(b"foo"))
 
-    def test_a_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
+    def test_a_finalised_record_can_be_retrieved(self, cache: SQLiteCache):
         with cache.insertion(Path(b"foo")) as insertion:
             insertion.save_head(Head(b"head"), 8)
             insertion.save_body_chunk(b"body", 0)
@@ -309,7 +306,7 @@ class TestCache:
         body = b"".join(x.read() for x in lookup.data)
         assert body == b"bodydata"
 
-    def test_a_long_finalised_record_can_be_retrieved(self, cache: Cache[Insertion]):
+    def test_a_long_finalised_record_can_be_retrieved(self, cache: SQLiteCache):
         data = [f"body-{i}".encode() for i in range(128)]
 
         with cache.insertion(Path(b"foo")) as insertion:
@@ -327,7 +324,7 @@ class TestCache:
         body = b"".join(x.read() for x in lookup.data)
         assert body == b"".join(data)
 
-    def test_an_unfinalised_record_cannot_be_retrieved(self, cache: Cache[Insertion]):
+    def test_an_unfinalised_record_cannot_be_retrieved(self, cache: SQLiteCache):
         with cache.insertion(Path(b"foo")) as insertion:
             insertion.save_head(Head(b"head"), 8)
             insertion.save_body_chunk(b"body", 0)
@@ -338,7 +335,7 @@ class TestCache:
 
     @parametrize("n_concurrent", [2, 8, 24, 64, 128])
     async def test_the_same_path_can_be_inserted_concurrently(
-        self, cache: Cache[Insertion], n_concurrent: int
+        self, cache: SQLiteCache, n_concurrent: int
     ):
         """This is not particularly useful, but it's better to insert the path
         than to e.g. corrupt the data. So long as we return a complete record,
@@ -383,7 +380,7 @@ class TestCache:
 
     @parametrize("n_concurrent", [2, 8, 24, 64, 128])
     async def test_different_paths_can_be_inserted_concurrently(
-        self, cache: Cache[Insertion], n_concurrent: int
+        self, cache: SQLiteCache, n_concurrent: int
     ):
         semaphore = asyncio.Semaphore(n_concurrent)
 

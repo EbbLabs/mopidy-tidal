@@ -27,7 +27,6 @@ out which url we would try to get.
 """
 
 import sqlite3
-from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
@@ -35,7 +34,6 @@ from io import BytesIO
 from logging import getLogger
 from typing import (
     Callable,
-    ContextManager,
     NamedTuple,
     NewType,
     Self,
@@ -62,60 +60,6 @@ class Entry(NamedTuple):
 class Chunk:
     data: Iterator[BytesIO]
     total: int
-
-
-class Insertion(ABC):
-    """An insertion, i.e. a record we are saving as part of a proxying attempt.
-
-    We store the head and body chunks separately, since we have to receive the
-    entire head before being sure how to handle the request."""
-
-    @abstractmethod
-    def save_head(self, head: Head, content_length: int) -> None:
-        """Save the head for the given path."""
-
-    @abstractmethod
-    def save_body_chunk(self, data: Bytes, start: int) -> None:
-        """Save a chunk of the body for the given path at the given offset."""
-
-    @abstractmethod
-    def finalise(self) -> None:
-        """Mark this response as complete.
-
-        Implementations may choose to compact data here.
-        """
-
-
-class Cache[I: Insertion](ABC):
-    """A cache for the proxy, handling inserting and looking up remote
-    responses for local proxying."""
-
-    @abstractmethod
-    def get_head(self, path: Path) -> Head | None:
-        """Get the head if present for the given path."""
-
-    @abstractmethod
-    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
-        """Get a chunk of the body in the given half-closed range."""
-
-    @abstractmethod
-    def get_body(self, path: Path) -> Chunk | None:
-        """Get the whole body."""
-
-    @abstractmethod
-    def insertion(self, path: Path) -> ContextManager[I]: ...
-
-    def init(self) -> None:
-        """Initialise storage if needed."""
-
-    def lookup_path(self, id: TidalID) -> Path | None:
-        """Lookup the path for the given TidalID."""
-
-    def insert_path(self, id: TidalID, path: Path) -> None:
-        """Insert a TidalID -> Path mapping."""
-
-    def lookup_entry(self, id: TidalID) -> Entry | None:
-        """Query for a (finalised) entry + Path for this TidalID."""
 
 
 class ReadChunk(NamedTuple):
@@ -173,7 +117,7 @@ def entry_id() -> EntryID:
 
 
 @dataclass
-class SQLiteInsertion(Insertion):
+class SQLiteInsertion:
     """An unfinialised insertion into a cache backed by sqlite."""
 
     conn: sqlite3.Connection
@@ -256,7 +200,7 @@ class Metadata(NamedTuple):
 
 
 @dataclass
-class SQLiteCache(Cache[SQLiteInsertion]):
+class SQLiteCache:
     conn: sqlite3.Connection
     max_entries: int | None = None
 

@@ -30,7 +30,7 @@ from typing import AsyncIterator, Awaitable, Callable, Iterator, Self
 from urllib.parse import urlparse, urlunparse
 
 from . import types
-from .cache import Cache, Head, Path
+from .cache import Head, Path, SQLiteCache
 
 logger = getLogger(__name__)
 
@@ -166,11 +166,11 @@ class Ignore:
 
 
 @dataclass
-class Proxy[C: Cache]:
+class Proxy:
     """A proxy server for a given remote server."""
 
     config: ProxyConfig
-    cache_factory: CacheFactory[C]
+    cache_factory: CacheFactory[SQLiteCache]
     started: bool = False
     event: asyncio.Event = field(default_factory=asyncio.Event)
     buffer_bytes: int = 1024 * 1024 * 16  # 16 MiB for now
