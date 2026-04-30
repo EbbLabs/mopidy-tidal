@@ -121,7 +121,6 @@ class Cache[I: Insertion](ABC):
 class ReadChunk(NamedTuple):
     id: int
     from_: int
-    # to: int
 
 
 @dataclass
