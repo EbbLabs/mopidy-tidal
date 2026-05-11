@@ -1,5 +1,13 @@
 # Changelog
 
+#### Unreleased
+
+- Feature: HTTP API for managing the user's TIDAL favorites (albums, tracks,
+  artists, playlists). Mounted at `/tidal/favorites/<kind>s` by the Mopidy
+  HTTP frontend; supports `GET`, `POST { "id": "<id>" }` and
+  `DELETE /tidal/favorites/<kind>s/<id>`. Lets Mopidy clients add/remove
+  favorites without re-implementing TIDAL OAuth. (Fixes: #241)
+
 #### v0.3.13
 
 - Bugfix: Avoid MPD manifest parsing to fix regression with new/incompatible TIDAL MPD

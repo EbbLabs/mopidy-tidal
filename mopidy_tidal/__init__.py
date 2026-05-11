@@ -45,5 +45,10 @@ class Extension(ext.Extension):
 
     def setup(self, registry):
         from .backend import TidalBackend
+        from .web import make_app
 
         registry.add("backend", TidalBackend)
+        registry.add(
+            "http:app",
+            {"name": self.ext_name, "factory": make_app},
+        )

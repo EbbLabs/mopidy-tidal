@@ -41,7 +41,26 @@ def test_extension_setup_registers_tidal_backend(mocker):
 
     ext.setup(registry)
 
-    registry.add.assert_called_once()
-    plugin_type, obj = registry.add.mock_calls[0].args
-    assert plugin_type == "backend"
+    backend_calls = [
+        c for c in registry.add.mock_calls if c.args and c.args[0] == "backend"
+    ]
+    assert len(backend_calls) == 1
+    _, obj = backend_calls[0].args
     assert issubclass(obj, TidalBackend)
+
+
+def test_extension_setup_registers_http_app(mocker):
+    from mopidy_tidal.web import make_app
+
+    ext = Extension()
+    registry = mocker.Mock()
+
+    ext.setup(registry)
+
+    http_calls = [
+        c for c in registry.add.mock_calls if c.args and c.args[0] == "http:app"
+    ]
+    assert len(http_calls) == 1
+    _, spec = http_calls[0].args
+    assert spec["name"] == "tidal"
+    assert spec["factory"] is make_app
