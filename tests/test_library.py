@@ -1,6 +1,7 @@
 import pytest
 from mopidy.models import Album, Artist, Image, Ref, SearchResult, Track
 from requests import HTTPError
+from tidalapi.exceptions import TooManyRequests
 from tidalapi.playlist import Playlist
 
 from mopidy_tidal.library import ObjectNotFound, TidalLibraryProvider
@@ -26,9 +27,7 @@ def test_get_track_images(library_provider, backend, mocker):
     backend.session.album.assert_called_once_with("1-1-1")
 
 
-@pytest.mark.xfail
 def test_track_cache(library_provider, backend, mocker):
-    # I think the caching logic is broken here
     uris = ["tidal:track:0-0-0:1-1-1:2-2-2"]
     get_album = mocker.Mock()
     get_album.image.return_value = "tidal:album:1-1-1"
@@ -39,11 +38,92 @@ def test_track_cache(library_provider, backend, mocker):
     backend.session.album.assert_called_once_with("1-1-1")
 
 
-@pytest.mark.xfail(reason="returning nothing")
 def test_get_noimages(library_provider, backend):
     uris = ["tidal:track:0-0-0:1-1-1:2-2-2"]
-    backend.session.mock_add_spec([])
-    assert library_provider.get_images(uris) == {uris[0]: []}
+    backend.session.album.return_value = None
+
+    assert library_provider.get_images(uris) == {}
+    assert library_provider.get_images(uris) == {}
+    assert backend.session.album.call_count == 2
+
+
+@pytest.mark.parametrize("error", [HTTPError("503"), TooManyRequests()])
+def test_image_errors_are_retried(library_provider, backend, mocker, error):
+    uri = "tidal:track:0-0-0:1-1-1:2-2-2"
+    album = mocker.Mock()
+    album.image.return_value = "https://example.com/cover.jpg"
+    backend.session.album.side_effect = [error, album]
+
+    assert library_provider.get_images([uri]) == {}
+    expected = {uri: [Image(uri=album.image.return_value, width=320, height=320)]}
+    assert library_provider.get_images([uri]) == expected
+    assert library_provider.get_images([uri]) == expected
+    assert backend.session.album.call_count == 2
+
+
+def test_missing_images_are_omitted_from_mixed_results(
+    library_provider, backend, mocker
+):
+    album_uri = "tidal:album:1"
+    missing_uri = "tidal:album:2"
+    album = mocker.Mock()
+    album.image.return_value = "https://example.com/cover.jpg"
+    backend.session.album.side_effect = lambda album_id: (
+        album if album_id == "1" else None
+    )
+    expected = {album_uri: [Image(uri=album.image.return_value, width=320, height=320)]}
+
+    assert library_provider.get_images([album_uri, missing_uri]) == expected
+    backend.session.album.reset_mock()
+    assert library_provider.get_images([album_uri, missing_uri]) == expected
+    backend.session.album.assert_called_once_with("2")
+
+
+def test_directory_images_are_not_cached(library_provider, backend, tmp_path):
+    uris = ["tidal:directory", "tidal:mood", "tidal:genres"]
+
+    assert library_provider.get_images(uris) == {}
+    assert library_provider.get_images(uris) == {}
+    assert not list(tmp_path.rglob("*.cache"))
+    backend.session.album.assert_not_called()
+
+
+def test_tracks_on_same_album_share_image_cache(library_provider, backend, mocker):
+    first_uri = "tidal:track:0-0-0:1-1-1:2-2-2"
+    second_uri = "tidal:track:0-0-0:1-1-1:3-3-3"
+    album = mocker.Mock()
+    album.image.return_value = "https://example.com/cover.jpg"
+    backend.session.album.return_value = album
+
+    images = library_provider.get_images([first_uri, second_uri])
+
+    assert images[first_uri] == images[second_uri]
+    backend.session.album.assert_called_once_with("1-1-1")
+
+
+@pytest.mark.parametrize("track_first", [False, True])
+def test_album_and_track_share_image_cache(
+    library_provider, backend, mocker, track_first
+):
+    album_uri = "tidal:album:1-1-1"
+    track_uri = "tidal:track:0-0-0:1-1-1:2-2-2"
+    other_track_uri = "tidal:track:0-0-0:1-1-1:3-3-3"
+    album = mocker.Mock()
+    album.image.return_value = "https://example.com/cover.jpg"
+    backend.session.album.return_value = album
+    expected_images = [Image(uri=album.image.return_value, width=320, height=320)]
+    uris = [track_uri, album_uri] if track_first else [album_uri, track_uri]
+
+    assert library_provider.get_images(uris) == {
+        album_uri: expected_images,
+        track_uri: expected_images,
+    }
+    backend.session.album.assert_called_once_with("1-1-1")
+
+    assert library_provider.get_images([other_track_uri]) == {
+        other_track_uri: expected_images,
+    }
+    backend.session.album.assert_called_once_with("1-1-1")
 
 
 class TestSearch:
