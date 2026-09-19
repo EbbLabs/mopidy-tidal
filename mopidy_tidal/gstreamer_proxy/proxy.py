@@ -30,7 +30,7 @@ from typing import AsyncIterator, Awaitable, Callable, Iterator, Self
 from urllib.parse import urlparse, urlunparse
 
 from . import types
-from .cache import Cache, Head, Path
+from .cache import Head, Path, SQLiteCache
 
 logger = getLogger(__name__)
 
@@ -104,6 +104,9 @@ class Stream:
         while True:
             yield await self.readline(timeout)
 
+    def writer_buffered(self) -> int:
+        return self.tx.transport.get_write_buffer_size()
+
 
 @dataclass
 class Connection:
@@ -117,7 +120,7 @@ class Connection:
         try:
             yield self
         except Exception:
-            logger.warning("Errored, closing connection")
+            logger.exception("Errored, closing connection")
             self.local.tx.close()
             if self.remote:
                 self.remote.tx.close()
@@ -163,11 +166,11 @@ class Ignore:
 
 
 @dataclass
-class Proxy[C: Cache]:
+class Proxy:
     """A proxy server for a given remote server."""
 
     config: ProxyConfig
-    cache_factory: CacheFactory[C]
+    cache_factory: CacheFactory[SQLiteCache]
     started: bool = False
     event: asyncio.Event = field(default_factory=asyncio.Event)
     buffer_bytes: int = 1024 * 1024 * 16  # 16 MiB for now
@@ -284,7 +287,7 @@ class Proxy[C: Cache]:
                     range = range.expand(parsed.content_length)
                     start, end, _ = range
 
-                    chunks = self.cache.get_body_chunk(path, start, end)
+                    files = self.cache.get_body_chunk(path, start, end)
 
                     head_lines = head.splitlines()[1:-1]
                     del head
@@ -298,11 +301,21 @@ class Proxy[C: Cache]:
                     await local.write(b"\r\n".join(head_lines))
                 else:
                     await local.write(head)
-                    chunks = self.cache.get_body(path)
+                    files = self.cache.get_body(path)
 
-                assert chunks
-                for chunk in chunks.data:
-                    await local.write(chunk)
+                assert files
+                for file in files.data:
+                    while True:
+                        logger.debug("Reading cached data")
+                        data = file.read(self.buffer_bytes)
+                        if not data:
+                            logger.debug("No more data to send")
+                            break
+                        else:
+                            logger.debug("writing cached data")
+                            local.tx.write(data)
+                            if local.writer_buffered() >= self.buffer_bytes:
+                                await local.tx.drain()
 
             # cache miss
             else:
@@ -318,41 +331,38 @@ class Proxy[C: Cache]:
                     head, content_length, keep_alive = await self.stream_head(
                         local, remote
                     )
-                    insertion.save_head(Head(bytes(head)))
+                    assert content_length
+                    insertion.save_head(Head(bytes(head)), content_length)
 
                     buffer = types.Buffer.with_capacity(self.buffer_bytes)
-                    offset = 0
                     read = 0
                     finished = False
 
-                    while not finished:
-                        data = await remote.read(self.buffer_bytes)
-                        read += len(data)
-                        if not data:  # socket closed
-                            break
-                        local.tx.write(data)
-                        buffer.extend(data)
-                        del data
+                    with insertion.writer() as cache_writer:
+                        while not finished:
+                            data = await remote.read(self.buffer_bytes)
+                            read += len(data)
+                            if not data:  # socket closed
+                                break
+                            local.tx.write(data)
+                            buffer.extend(data)
+                            del data
 
-                        finished = content_length is not None and read >= content_length
+                            finished = content_length is not None and read >= content_length
 
-                        # This rarely happens, since gstreamer is on localhost
-                        # an data is available to read as soon as we call
-                        # .write() above.  But if gstreamer *does* block, we're
-                        # better off blocking than running out of ram.
-                        gstreamer_buffer_full = (
-                            local.tx.transport.get_write_buffer_size()
-                            >= self.buffer_bytes
-                        )
-                        insertion_buffer_full = buffer.contains >= self.buffer_bytes
+                            # This rarely happens, since gstreamer is on localhost
+                            # and data is available to read as soon as we call
+                            # .write() above.  But if gstreamer *does* block, we're
+                            # better off blocking than running out of ram.
+                            gstreamer_buffer_full = local.writer_buffered() >= self.buffer_bytes
+                            insertion_buffer_full = buffer.contains >= self.buffer_bytes
 
-                        if gstreamer_buffer_full or finished:
-                            await local.tx.drain()
+                            if gstreamer_buffer_full or finished:
+                                await local.tx.drain()
 
-                        if insertion_buffer_full or finished:
-                            insertion.save_body_chunk(buffer.data(), offset)
-                            offset += buffer.contains
-                            buffer.clear()
+                            if insertion_buffer_full or finished:
+                                cache_writer.write(buffer.data())
+                                buffer.clear()
 
                     await remote.close()
                     if not keep_alive:
@@ -366,6 +376,8 @@ class Proxy[C: Cache]:
                             "Fetched whole record; finalising insertion %s", insertion
                         )
                         insertion.finalise()
+
+        logger.debug("Nothing more to do; handled connection")
 
 
 class ThreadedProxy:

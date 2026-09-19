@@ -7,7 +7,7 @@ calling code is expected to do something like:
 ```python
 with cache.insertion(path) as insertion:
    ...
-   insertion.save_head(head)
+   insertion.save_head(head, content_length)
    ...
    insertion.save_body_chunk(data, start)
    ...
@@ -27,25 +27,24 @@ out which url we would try to get.
 """
 
 import sqlite3
-from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
+from io import BytesIO
 from logging import getLogger
 from typing import (
     Callable,
-    ContextManager,
     NamedTuple,
     NewType,
     Self,
-    Sequence,
     assert_never,
+    cast,
 )
 from uuid import uuid4
 
 logger = getLogger()
 
-Bytes = bytes | bytearray
+Bytes = bytes | bytearray | memoryview
 Head = NewType("Head", bytes)
 Path = NewType("Path", bytes)
 TidalID = NewType("TidalID", str)
@@ -59,131 +58,57 @@ class Entry(NamedTuple):
 
 @dataclass
 class Chunk:
-    data: Iterator[Bytes]
+    data: Iterator[sqlite3.Blob]
     total: int
 
 
-class Insertion(ABC):
-    """An insertion, i.e. a record we are saving as part of a proxying attempt.
-
-    We store the head and body chunks separately, since we have to receive the
-    entire head before being sure how to handle the request."""
-
-    @abstractmethod
-    def save_head(self, head: Head) -> None:
-        """Save the head for the given path."""
-
-    @abstractmethod
-    def save_body_chunk(self, data: Bytes, start: int) -> None:
-        """Save a chunk of the body for the given path at the given offset."""
-
-    @abstractmethod
-    def finalise(self) -> None:
-        """Mark this response as complete.
-
-        Implementations may choose to compact data here.
-        """
-
-
-class Cache[I: Insertion](ABC):
-    """A cache for the proxy, handling inserting and looking up remote
-    responses for local proxying."""
-
-    @abstractmethod
-    def get_head(self, path: Path) -> Head | None:
-        """Get the head if present for the given path."""
-
-    @abstractmethod
-    def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
-        """Get a chunk of the body in the given half-closed range."""
-
-    @abstractmethod
-    def get_body(self, path: Path) -> Chunk | None:
-        """Get the whole body."""
-
-    @abstractmethod
-    def insertion(self, path: Path) -> ContextManager[I]: ...
-
-    def init(self) -> None:
-        """Initialise storage if needed."""
-
-    def lookup_path(self, id: TidalID) -> Path | None:
-        """Lookup the path for the given TidalID."""
-
-    def insert_path(self, id: TidalID, path: Path) -> None:
-        """Insert a TidalID -> Path mapping."""
-
-    def lookup_entry(self, id: TidalID) -> Entry | None:
-        """Query for a (finalised) entry + Path for this TidalID."""
+class ReadChunk(NamedTuple):
+    id: int
+    from_: int
 
 
 @dataclass
 class ChunkedBuffer:
     """A lazily resolved buffer over discrete chunks of data."""
 
-    offsets: Sequence[int]
-    chunks: Callable[[int], Bytes]
+    slices: list["StoredChunk"]
+    get_chunk: Callable[[int], BytesIO]
+
+    def get_closed_range(self, start: int, end: int) -> Iterator[Bytes]:
+        """Get a fully closed range from the backing data."""
+        return self.get_range(start, end + 1)
 
     def get_range(self, start: int, end: int) -> Iterator[Bytes]:
-        """Get a (half closed) range from the backing data."""
-        end += 1  # http uses closed ranges
-        offsets = sorted(self.offsets)
-
-        start_offset = None
-        for offset in reversed(offsets):
-            if offset <= start:
-                start_offset = offset
+        """Get a half-closed range from the backing data."""
+        for fp in self.open_range(start):
+            yield fp.read(end)
+            end -= fp.tell()
+            if not end:
                 break
-        if start_offset is None:
+
+    def open_range(self, start: int) -> Iterator[BytesIO]:
+        slices: list[ReadChunk] = []
+        for slice in self.slices:
+            if not slices:
+                if slice.end > start:
+                    slices.append(ReadChunk(slice.id, start - slice.start))
+            else:
+                slices.append(ReadChunk(slice.id, 0))
+
+        if not slices:
             raise KeyError("Data does not contain start range")
 
-        end_offset = None
-        for offset in offsets:
-            if offset >= end:
-                break
-            else:
-                end_offset = offset
-
-        if end_offset is None:
-            end_offset = offsets[-1]
-
-        sent = 0
-
-        def shift_out(
-            chunk: Bytes, start: int | None = None, end: int | None = None
-        ) -> Bytes:
-            nonlocal sent
-            data = chunk[start:end]
-            sent += len(data)
-            return data
-
-        other_chunks = (
-            shift_out(self.chunks(x))
-            for x in self.offsets[
-                offsets.index(start_offset) + 1 : offsets.index(end_offset)
-            ]
-        )
-
-        assert start >= start_offset
-        assert end >= end_offset
-
-        yield shift_out(self.chunks(start_offset), start=start - start_offset)
-        yield from other_chunks
-        if start_offset != end_offset:
-            yield shift_out(self.chunks(end_offset), end=end - end_offset)
-
-        logger.debug("Sent %s", sent)
-        assert sent == end - start, f"Sent {sent}, end={end}, start={start}"
+        for slice in slices:
+            with self.get_chunk(slice.id) as fp:
+                fp.seek(slice.from_)
+                yield fp
 
     @classmethod
-    def from_db(cls, cur: sqlite3.Cursor, entry_id: EntryID, *offsets: int) -> Self:
-        def get_chunk(start: int) -> Bytes:
-            cur.execute(
-                "SELECT data FROM body WHERE entry_id=? AND start=?", (entry_id, start)
-            )
-            return cur.fetchone()[0]
+    def from_db(cls, conn: sqlite3.Connection, metadata: "Metadata") -> Self:
+        def get_chunk(row: int) -> BytesIO:
+            return cast(BytesIO, conn.blobopen("body", "data", row))
 
-        return cls(offsets, get_chunk)
+        return cls(metadata.ranges, get_chunk)
 
 
 def entry_id() -> EntryID:
@@ -192,28 +117,42 @@ def entry_id() -> EntryID:
 
 
 @dataclass
-class SQLiteInsertion(Insertion):
+class SQLiteInsertion:
     """An unfinialised insertion into a cache backed by sqlite."""
 
-    cur: sqlite3.Cursor
+    conn: sqlite3.Connection
     path: Path
     final: bool = False
     entry_id: EntryID = field(default_factory=entry_id)
+    row: int | None = None
 
-    def save_head(self, head: Head) -> None:
-        self.cur.execute(
+    def save_head(self, head: Head, content_length: int) -> None:
+        self.conn.execute(
             "INSERT INTO head (entry_id, path, data) VALUES (?, ?, ?)",
             (self.entry_id, self.path, head),
         )
+        self.row = self.conn.execute(
+            "INSERT INTO body (entry_id, path, start, data, len) VALUES (?, ?, 0, zeroblob(?), ?) RETURNING id",
+            (self.entry_id, self.path, content_length, content_length),
+        ).fetchone()[0]
 
     def save_body_chunk(self, data: Bytes, start: int) -> None:
-        self.cur.execute(
-            "INSERT INTO body (entry_id, path, start, data, len) VALUES (?, ?, ?, ?, ?)",
-            (self.entry_id, self.path, start, data, len(data)),
-        )
+        with self.writer() as fp:
+            fp.seek(start)
+            fp.write(data)
+
+    def writer(self) -> sqlite3.Blob:
+        assert self.row, "Writer called before .save_head()"
+        return self.conn.blobopen("body", "data", self.row)
 
     def finalise(self) -> None:
         self.final = True
+
+
+class StoredChunk(NamedTuple):
+    id: int
+    start: int
+    end: int
 
 
 class Metadata(NamedTuple):
@@ -223,7 +162,7 @@ class Metadata(NamedTuple):
     request (which may be partial)."""
 
     total: int
-    offsets: list[int]
+    ranges: list[StoredChunk]
     entry_id: EntryID
 
     @classmethod
@@ -237,7 +176,8 @@ class Metadata(NamedTuple):
       LIMIT 1
     )
     SELECT
-      start
+      id
+      , start
       , len
       , body.entry_id
     FROM body
@@ -246,21 +186,21 @@ class Metadata(NamedTuple):
         """,
             (path,),
         )
-        offsets = []
+        ranges = []
         total = 0
         entry_id = None
-        for start, length, entry_id in cur.fetchall():
-            offsets.append(start)
+        for id, start, length, entry_id in cur.fetchall():
+            ranges.append(StoredChunk(id, start, start + length))
             total += length
 
         if entry_id:
-            return cls(total, offsets, entry_id)
+            return cls(total, ranges, entry_id)
         else:
             return None
 
 
 @dataclass
-class SQLiteCache(Cache[SQLiteInsertion]):
+class SQLiteCache:
     conn: sqlite3.Connection
     max_entries: int | None = None
 
@@ -379,23 +319,17 @@ RETURNING data
     def get_body(self, path: Path) -> Chunk | None:
         cur = self.conn.cursor()
         if metadata := Metadata.lookup(cur, path):
-            total, offsets, entry_id = metadata
             return Chunk(
-                data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
-                    0, total - 1
-                ),
-                total=total,
+                data=ChunkedBuffer.from_db(self.conn, metadata).open_range(0),
+                total=metadata.total,
             )
 
     def get_body_chunk(self, path: Path, start: int, end: int) -> Chunk | None:
         cur = self.conn.cursor()
         if metadata := Metadata.lookup(cur, path):
-            total, offsets, entry_id = metadata
             return Chunk(
-                data=ChunkedBuffer.from_db(cur, entry_id, *offsets).get_range(
-                    start, end
-                ),
-                total=total,
+                data=ChunkedBuffer.from_db(self.conn, metadata).open_range(start),
+                total=metadata.total,
             )
 
     @contextmanager
@@ -403,7 +337,7 @@ RETURNING data
         with self.conn as conn:
             cur = conn.cursor()
 
-            insertion = SQLiteInsertion(cur, path)
+            insertion = SQLiteInsertion(conn, path)
             yield insertion
 
             if insertion.final:

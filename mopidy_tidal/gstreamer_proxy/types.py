@@ -4,6 +4,8 @@ from typing import NamedTuple, Self
 
 
 class FullRange(NamedTuple):
+    """Fully closed range from a total length."""
+
     start: int
     end: int
     total: int
@@ -13,6 +15,8 @@ class FullRange(NamedTuple):
 
 
 class Range(NamedTuple):
+    """Fully closed range between two points."""
+
     start: int | None
     end: int | None
 
