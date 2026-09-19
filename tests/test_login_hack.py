@@ -24,7 +24,7 @@ def library_provider(get_backend, config, mocker):
     # Always start in logged-out state
     session.check_login.return_value = False
 
-    backend._active_session = session
+    backend._active_session.set(session)
 
     return backend, TidalLibraryProvider(backend=backend)
 

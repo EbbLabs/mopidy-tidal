@@ -22,7 +22,8 @@ def test_backend_begins_in_correct_state(get_backend):
     backend, config, *_ = get_backend()
 
     assert backend.uri_schemes == ("tidal",)
-    assert not backend._active_session
+    with pytest.raises(ValueError):
+        backend._active_session.get()
     assert backend._config is config
 
 
@@ -36,7 +37,7 @@ def test_initial_login_caches_credentials(get_backend, config):
     # Starting the mock web server will trigger login instantly
     backend.web_auth_server.start_oauth_daemon.side_effect = login_success
 
-    backend._active_session = session
+    backend._active_session.set(session)
     authf = Path(config["core"]["data_dir"], "tidal/tidal-oauth.json")
     assert not authf.exists()
 
@@ -74,7 +75,7 @@ def test_login_after_failed_cached_credentials_overwrites_cached_credentials(
     # Starting the mock web server will trigger login instantly
     backend.web_auth_server.start_oauth_daemon.side_effect = login_success
 
-    backend._active_session = session
+    backend._active_session.set(session)
     authf = Path(config["core"]["data_dir"], "tidal/tidal-oauth.json")
     cached_data = {
         "token_type": dict(data="token_type2"),
@@ -114,7 +115,7 @@ def test_failed_login_does_not_overwrite_cached_credentials(
     # Starting the mock web server will trigger login instantly (but login will fail)
     backend.web_auth_server.start_oauth_daemon.side_effect = login_failed
 
-    backend._active_session = session
+    backend._active_session.set(session)
     authf = Path(config["core"]["data_dir"], "tidal/tidal-oauth.json")
     cached_data = {
         "token_type": dict(data="token_type2"),
@@ -149,7 +150,7 @@ def test_failed_overall_login_throws_error(get_backend, tmp_path, mocker, config
     # Starting the mock web server will trigger login instantly (but login will fail)
     backend.web_auth_server.start_oauth_daemon.side_effect = login_failed
 
-    backend._active_session = session
+    backend._active_session.set(session)
     authf = tmp_path / "auth.json"
 
     with pytest.raises(ConnectionError):
@@ -160,7 +161,7 @@ def test_failed_overall_login_throws_error(get_backend, tmp_path, mocker, config
 
 def test_logs_in(get_backend, mocker, config):
     backend, _, _, session_factory, session = get_backend(config=config)
-    backend._active_session = session
+    backend._active_session.set(session)
 
     def login_success(*_, **__):
         session.check_login.return_value = True
@@ -192,7 +193,7 @@ def test_accessing_session_triggers_lazy_login(get_backend, mocker, config):
     backend.on_start()
 
     session.load_session_from_file.assert_not_called()
-    assert not backend._active_session.check_login()
+    assert not backend._active_session.get().check_login()
     assert backend.session  # accessing session will trigger login
     assert backend.session.check_login()
     session_factory.assert_called_once()
