@@ -73,6 +73,15 @@ class ImagesGetter:
     def _get_api_getter(self, item_type: str):
         return getattr(self._session, item_type, None)
 
+    @staticmethod
+    def image_cache_key(uri: str) -> str:
+        parts = uri.split(":")
+        if len(parts) > 3 and parts[1] == "track":
+            # Tracks use their associated album's artwork. Normalizing the key
+            # lets every track on the album share one cache entry.
+            return ":".join([parts[0], "album", parts[3]])
+        return uri
+
     def _get_images(self, uri) -> List[Image]:
         assert uri.startswith("tidal:"), f"Invalid TIDAL URI: {uri}"
 
@@ -82,7 +91,6 @@ class ImagesGetter:
             # For tracks, retrieve the artwork of the associated album
             item_type = "album"
             item_id = parts[3]
-            uri = ":".join([parts[0], "album", parts[3]])
         elif item_type == "album":
             item_id = parts[2]
         elif item_type == "playlist":
@@ -95,12 +103,12 @@ class ImagesGetter:
             # uri has no image associated to it (eg. tidal:mood tidal:genres etc.)
             return []
 
-        if uri in self._image_cache:
-            # Cache hit
-            logger.debug("Cache hit for {}".format(uri))
-            return self._image_cache[uri]
+        cache_key = self.image_cache_key(uri)
+        if cache_key in self._image_cache:
+            logger.debug("Cache hit for %s", cache_key)
+            return self._image_cache[cache_key]
 
-        logger.debug("Retrieving %r from the API", uri)
+        logger.debug("Retrieving %r from the API", cache_key)
         getter = self._get_api_getter(item_type)
         if not getter:
             logger.warning("The API item type %s has no session getters", item_type)
@@ -108,15 +116,15 @@ class ImagesGetter:
 
         item = getter(item_id)
         if not item:
-            logger.debug("%r is not available on the backend", uri)
+            logger.debug("%r is not available on the backend", cache_key)
             return []
 
         img_uri = self._get_image_uri(item)
         if not img_uri:
-            logger.debug("%r has no associated images", uri)
+            logger.debug("%r has no associated images", cache_key)
             return []
 
-        logger.debug("Image URL for %r: %r", uri, img_uri)
+        logger.debug("Image URL for %r: %r", cache_key, img_uri)
         return [Image(uri=img_uri, width=320, height=320)]
 
     def __call__(self, uri: str) -> Tuple[str, List[Image]]:
@@ -135,7 +143,12 @@ class ImagesGetter:
             return uri, []
 
     def cache_update(self, images):
-        self._image_cache.update(images)
+        self._image_cache.update(
+            {
+                self.image_cache_key(uri): item_images
+                for uri, item_images in images.items()
+            }
+        )
 
 
 class TidalLibraryProvider(backend.LibraryProvider):
@@ -360,13 +373,30 @@ class TidalLibraryProvider(backend.LibraryProvider):
 
     @login_hack
     def get_images(self, uris) -> dict[str, list[Image]]:
-        logger.info("Searching Tidal for images for %r" % uris)
+        logger.info("Searching Tidal for images for %r", uris)
         images_getter = ImagesGetter(self._session)
+        uris = list(uris)
+
+        # Several tracks can share one album image. Fetch each normalized cache
+        # key only once per request, then map the result back to every input URI.
+        representatives = {}
+        for uri in uris:
+            cache_key = images_getter.image_cache_key(uri)
+            representatives.setdefault(cache_key, uri)
 
         with ThreadPoolExecutor(4, thread_name_prefix="mopidy-tidal-images-") as pool:
-            pool_res = pool.map(images_getter, uris)
+            pool_res = pool.map(images_getter, representatives.values())
 
-        images = {uri: item_images for uri, item_images in pool_res if item_images}
+        images_by_key = {
+            images_getter.image_cache_key(uri): item_images
+            for uri, item_images in pool_res
+        }
+        images = {}
+        for uri in uris:
+            cache_key = images_getter.image_cache_key(uri)
+            item_images = images_by_key[cache_key]
+            if item_images:
+                images[uri] = item_images
         images_getter.cache_update(images)
         return images
 
