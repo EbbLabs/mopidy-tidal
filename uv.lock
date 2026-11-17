@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -575,7 +575,7 @@ wheels = [
 
 [[package]]
 name = "mopidy-tidal"
-version = "0.3.13"
+version = "0.3.14"
 source = { editable = "." }
 dependencies = [
     { name = "mopidy" },
@@ -608,7 +608,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mopidy", specifier = ">=3.0" },
-    { name = "tidalapi", specifier = ">=0.8.10" },
+    { name = "tidalapi", specifier = ">=0.8.11" },
 ]
 
 [package.metadata.requires-dev]
@@ -636,11 +636,11 @@ dev = [
 
 [[package]]
 name = "mpegdash"
-version = "0.4.0"
+version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0b/21/59d355a976cb924d050176a9430bbea75851eeb03cbd281b3eb1a14ae1e9/mpegdash-0.4.0.tar.gz", hash = "sha256:65368c7a367c6875eb8c456a08644eb0708981a745044da0c9e942a3bc2b6389", size = 12338, upload-time = "2024-01-16T23:33:19.214Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/48/10/fc39d56bce11d703617435a47843c7c33fa0f84635c6136279c9f73ecd5b/mpegdash-0.4.1.tar.gz", hash = "sha256:e31d81e1f0184cc456553ef2a4a1de1c662972b8ce04b687c1854180912759e6", size = 12665, upload-time = "2026-01-18T23:58:00.28Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ab/1a/5be778993af7c2079e7a24dc208424af6fe1b6392dfaac268a8cf42ba842/mpegdash-0.4.0-py3-none-any.whl", hash = "sha256:d07f6e1f2a67ddce1be501e3ad7abc29a2d6a7b1830b4da974b49c2ebe99cf2a", size = 10702, upload-time = "2024-01-16T23:33:17.681Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/a0/7a2734a7d734d81b6627ac1c470ce388f5a80e5669d9803a5c3c179ca84f/mpegdash-0.4.1-py3-none-any.whl", hash = "sha256:788e559b73acbf9175422548c58a4c441486c0ce0633fa10f77097bfffeaad4d", size = 11009, upload-time = "2026-01-18T23:57:59.011Z" },
 ]
 
 [[package]]
@@ -1012,7 +1012,7 @@ wheels = [
 
 [[package]]
 name = "tidalapi"
-version = "0.8.10"
+version = "0.8.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "isodate" },
@@ -1023,9 +1023,9 @@ dependencies = [
     { name = "requests" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b0/6c/9f85b315507083eb6990bb1e2d46d9e5adcdb2a88aa1878aff637d75ff3a/tidalapi-0.8.10.tar.gz", hash = "sha256:f5b7d6ab19cfd40907941200a91d491f16d1b68b0323af9b0660bb739e0aab80", size = 58284, upload-time = "2025-12-17T17:04:47.814Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/ab/5552d1ba6e4abb627a018cd14e3253fdf3dbfd28bba59f430401368f455a/tidalapi-0.8.11.tar.gz", hash = "sha256:c8dea8c382be37be12413665c8b81a516ecd6e97c0997a565f2ae1b21a2ed165", size = 58372, upload-time = "2026-01-19T19:34:36.899Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/49/1b67531d5c60027636c373831ed681e886408282dd4c693d462c100be7de/tidalapi-0.8.10-py3-none-any.whl", hash = "sha256:2f04f1a28a41a9e917c81607259a016a64232b61e0b9a5e388d3f16ce2817f78", size = 64232, upload-time = "2025-12-17T17:04:46.527Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/dc/11ae1f4150754e82234a56ed4d94d5c326022502ce3f1e6e214f569c5c3e/tidalapi-0.8.11-py3-none-any.whl", hash = "sha256:1ed2485bb4634907afc434163fba22dc8a323d90cc92306973ab68bcdfef5c54", size = 64279, upload-time = "2026-01-19T19:34:35.501Z" },
 ]
 
 [[package]]
