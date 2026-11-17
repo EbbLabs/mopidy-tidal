@@ -255,6 +255,7 @@ def make_playlist(playlist_id, tracks):
         id=str(playlist_id),
         uri=f"tidal:playlist:{playlist_id}",
         tracks=tracks,
+        tracks_paginated=Mock(return_value=tracks),
         num_tracks=len(tracks),
         last_updated=10,
     )
@@ -319,8 +320,11 @@ compare = pytest.fixture(lambda: _compare)
 
 
 @pytest.fixture
-def get_backend(mocker):
-    def _get_backend(config=mocker.MagicMock(), audio=mocker.Mock()):
+def get_backend(mocker, config):
+    # Default to the real test config: its cache directory is a temporary one. A
+    # bare MagicMock would make the backend create a `MagicMock/` directory in the
+    # current working directory.
+    def _get_backend(config=config, audio=mocker.Mock()):
         backend = TidalBackend(config, audio)
         session_factory = mocker.Mock()
         # session = mocker.Mock()

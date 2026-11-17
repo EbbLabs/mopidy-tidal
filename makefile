@@ -22,8 +22,7 @@ system-venv:
 	@printf "You now need to activate the venv by sourcing the right file, e.g. source .venv/bin/activate\n"
 
 test:
-	${UV} pytest tests/ \
--k "not gt_$$(python3 --version | sed 's/Python \([0-9]\).\([0-9]*\)\..*/\1_\2/')" 
+	${UV} pytest tests/
 
 integration-test:
 	${UV} pytest integration_tests/

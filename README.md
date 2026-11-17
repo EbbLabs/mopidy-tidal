@@ -111,7 +111,7 @@ substituting for your own local configuration as appropriate.
 
 Released versions of Mopidy-Tidal have the same requirement as the Mopidy
 version they depend on. Development code may depend on unreleased features.
-At the time of writing we require python >= 3.9 in anticipation of mopidy 3.5.0.
+Mopidy-Tidal requires python >= 3.12. It is tested on python 3.12, 3.13 and 3.14.
 
 ### Python-Tidal
 
@@ -162,7 +162,7 @@ Restart the Mopidy service after adding/changing the Tidal configuration
 The configuration is usually stored in `/etc/mopidy/mopidy.conf`, depending on your system configuration. Add the
 configuration listed below in the respective configuration file and set the relevant fields.
 
-```
+```ini
 [tidal]
 enabled = true
 quality = LOSSLESS
@@ -171,11 +171,11 @@ login_server_port = 8989
 lazy = false
 login_method = AUTO
 playlist_cache_refresh_secs = 0
-client_id =
-client_secret =
-playback_cache = false
-playback_cache_max_entries = 1024
-playback_cache_buffer_bytes = 16777216 # 16 MiB
+# client_id =
+# client_secret =
+# playback_cache = false
+# playback_cache_max_entries = 1024
+# playback_cache_buffer_bytes = 16777216 # 16 MiB
 ```
 
 ### Plugin parameters
@@ -186,12 +186,12 @@ playback_cache_buffer_bytes = 16777216 # 16 MiB
     * `LOSSLESS` provides HiFi lossless FLAC if available.
     * `HIGH`, `LOW` provides M4A in either 320kbps or 96kbps bitrates.
 * **auth_method (Optional):**: Select the authentication mode to use.
-    * `OAUTH` used as default and currently allows playback in all available qualities, including `HI_RES_LOSSLESS`.
-    * `PKCE` is optional, and allows `HI_RES_LOSSLESS`, `LOSSLESS` playback. This method uses the HTTP server for
-      completing the second authentication step.
-* **login_web_port (Optional):**: Port to use for the authentication HTTP Server. Default port: `8989`, i.e. web server
+    * `OAUTH` is the default and currently allows playback in all available qualities, including `HI_RES_LOSSLESS`.
+    * `PKCE` is optional and also allows `HI_RES_LOSSLESS` and `LOSSLESS` playback. This method uses the HTTP server
+      for completing the second authentication step.
+* **login_server_port (Optional):**: Port to use for the authentication HTTP Server. Default port: `8989`, i.e. web server
   will be available on `<host_ip:>:8989` eg. `localhost:8989`.
-* **playlist_cache_refresh_secs (Optional):** Tells if (and how often) playlist
+* **playlist_cache_refresh_secs (Optional):** Specifies if (and how often) playlist
   content should be refreshed upon lookup.
     * `0` (default): The default value (`0`) means that playlists won't be refreshed after the
       extension has started, unless they are explicitly modified from mopidy.

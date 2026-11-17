@@ -85,3 +85,17 @@ class TestCreateMopidyAlbum:
         assert mopidy_album.artists == {
             mopidy_models.Artist(name="Arty", uri="tidal:artist:12")
         }
+
+
+def test_mix_playlist_skips_unavailable_tracks(tidal_tracks):
+    from unittest.mock import Mock
+
+    from mopidy_tidal.full_models_mappers import create_mopidy_mix_playlist
+
+    tidal_tracks[0].available = False
+    mix = Mock(id="m1", title="Mix", sub_title="Sub")
+    mix.items.return_value = tidal_tracks
+
+    playlist = create_mopidy_mix_playlist(mix)
+
+    assert [t.uri for t in playlist.tracks] == [t.uri for t in tidal_tracks[1:]]

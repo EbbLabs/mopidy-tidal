@@ -4,7 +4,7 @@ import logging
 
 from mopidy.models import Album, Artist, Playlist, Track
 
-from mopidy_tidal.helpers import to_timestamp
+from mopidy_tidal.helpers import is_available, to_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -94,5 +94,5 @@ def create_mopidy_mix_playlist(tidal_mix):
     return Playlist(
         uri=f"tidal:mix:{tidal_mix.id}",
         name=f"{tidal_mix.title} ({tidal_mix.sub_title})",
-        tracks=create_mopidy_tracks(tidal_mix.items()),
+        tracks=create_mopidy_tracks([t for t in tidal_mix.items() if is_available(t)]),
     )

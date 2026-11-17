@@ -11,6 +11,7 @@ from requests.exceptions import HTTPError
 from tidalapi.exceptions import ObjectNotFound, TooManyRequests
 
 from mopidy_tidal import full_models_mappers, ref_models_mappers
+from mopidy_tidal.helpers import is_available
 from mopidy_tidal.login_hack import login_hack
 from mopidy_tidal.lru_cache import LruCache
 from mopidy_tidal.playlists import PlaylistMetadataCache
@@ -496,7 +497,11 @@ class TidalLibraryProvider(backend.LibraryProvider):
     def _lookup_playlist(self, session, parts):
         playlist_id = parts[2]
         tidal_playlist = session.playlist(playlist_id)
-        tidal_tracks = self._get_playlist_tracks(session, playlist_id)
+        tidal_tracks = [
+            t
+            for t in self._get_playlist_tracks(session, playlist_id)
+            if is_available(t)
+        ]
         pl_tracks = full_models_mappers.create_mopidy_tracks(tidal_tracks)
         pl = full_models_mappers.create_mopidy_playlist(tidal_playlist, pl_tracks)
         # We need both the list of tracks and the mapped playlist object for

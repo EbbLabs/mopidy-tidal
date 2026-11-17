@@ -6,6 +6,8 @@ from mopidy.models import Ref
 from tidalapi import Album, Artist, Mix, Playlist, Track
 from tidalapi.mix import MixType
 
+from mopidy_tidal.helpers import is_available
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,7 +162,8 @@ def create_album(tidal_album):
 
 
 def create_tracks(tidal_tracks):
-    return [create_track(t) for t in tidal_tracks]
+    # Unavailable tracks are listed by TIDAL but can't be played back
+    return [create_track(t) for t in tidal_tracks if is_available(t)]
 
 
 def create_track(tidal_track):
