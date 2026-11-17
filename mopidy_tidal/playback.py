@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+import re
 from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse
 
@@ -25,21 +26,40 @@ from . import Extension, context
 logger = logging.getLogger(__name__)
 
 
+def mpd_stream_info(mpd: str) -> tuple[str, str]:
+    """Codec and bitrate of an MPD manifest, for logging.
+
+    The manifest is deliberately not parsed with tidalapi/mpegdash, which fails on
+    manifests it doesn't understand. Reading two attributes from the text can't fail:
+    anything that is missing is reported as "unknown".
+    """
+    codec = re.search(r'\bcodecs="([^"]+)"', mpd)
+    bandwidth = re.search(r'\bbandwidth="(\d+)"', mpd)
+    return (
+        codec.group(1) if codec else "unknown",
+        f"{round(int(bandwidth.group(1)) / 1000)}kbps" if bandwidth else "unknown",
+    )
+
+
 def as_stream(track: tidalapi.Track) -> str:
     stream = track.get_stream()
     logger.info("MimeType:{}".format(stream.manifest_mime_type))
 
     if stream.manifest_mime_type == ManifestMimeType.MPD:
-        logger.info(
-            "Starting playback of track:{}, (quality:{}, {}bit/{}Hz)".format(
-                track.id,
-                stream.audio_quality,
-                stream.bit_depth,
-                stream.sample_rate,
-            )
-        )
         data = stream.get_manifest_data()
         if data:
+            codec, bitrate = mpd_stream_info(data)
+            logger.info(
+                "Starting playback of track:{}, "
+                "(quality:{}, codec:{}, {}bit/{}Hz, bitrate:{})".format(
+                    track.id,
+                    stream.audio_quality,
+                    codec,
+                    stream.bit_depth,
+                    stream.sample_rate,
+                    bitrate,
+                )
+            )
             mpd_path = Path(
                 Extension.get_cache_dir(context.get_config()), "manifest.mpd"
             )
