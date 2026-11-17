@@ -348,13 +348,17 @@ class Proxy:
                             buffer.extend(data)
                             del data
 
-                            finished = content_length is not None and read >= content_length
+                            finished = (
+                                content_length is not None and read >= content_length
+                            )
 
                             # This rarely happens, since gstreamer is on localhost
                             # and data is available to read as soon as we call
                             # .write() above.  But if gstreamer *does* block, we're
                             # better off blocking than running out of ram.
-                            gstreamer_buffer_full = local.writer_buffered() >= self.buffer_bytes
+                            gstreamer_buffer_full = (
+                                local.writer_buffered() >= self.buffer_bytes
+                            )
                             insertion_buffer_full = buffer.contains >= self.buffer_bytes
 
                             if gstreamer_buffer_full or finished:
