@@ -1,6 +1,6 @@
 [project]
 name = "mopidy-tidal"
-version = "0.3.13"
+version = "0.3.14"
 description = "Mopidy Extension for Tidal music service integration."
 readme = "README.md"
 license = "Apache-2.0"
@@ -14,12 +14,16 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Sound/Audio :: Players",
 ]
 
 dependencies = [
     "Mopidy>=3.0",
-    "tidalapi>=0.8.10",
+    "tidalapi>=0.9.0",
 ]
 
 [project.urls]
@@ -61,8 +65,6 @@ module-root = ""
 
 [tool.pytest.ini_options]
 markers = [
-    "gt_3_10: Mark a test as requiring python > 3.10.",
-    "poor_test: Mark a test in need of improvement",
     "insufficiently_decoupled: Mark a test as insufficiently decoupled from implementation",
 ]
 filterwarnings = [

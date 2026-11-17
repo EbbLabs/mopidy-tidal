@@ -111,7 +111,7 @@ substituting for your own local configuration as appropriate.
 
 Released versions of Mopidy-Tidal have the same requirement as the Mopidy
 version they depend on. Development code may depend on unreleased features.
-At the time of writing we require python >= 3.9 in anticipation of mopidy 3.5.0.
+Mopidy-Tidal requires python >= 3.12. It is tested on python 3.12, 3.13 and 3.14.
 
 ### Python-Tidal
 
