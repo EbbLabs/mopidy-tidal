@@ -1,6 +1,6 @@
 # Changelog
 
-#### v0.3.14
+#### v0.3.14rc1
 
 - Improve caching of artworks *by [2tefan](https://github.com/2tefan)*
 - Playback proxy *by [2e0byo](https://github.com/2e0byo)*
