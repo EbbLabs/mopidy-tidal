@@ -60,6 +60,10 @@ tidal = "mopidy_tidal:Extension"
 requires = ["uv_build>=0.9"]
 build-backend = "uv_build"
 
+[tool.uv]
+# Mopidy 3.x imports pkg_resources, which setuptools 82 and later no longer ship.
+constraint-dependencies = ["setuptools<82"]
+
 [tool.uv.build-backend]
 module-root = ""
 
