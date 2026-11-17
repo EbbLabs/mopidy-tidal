@@ -15,7 +15,7 @@ from tidalapi.playlist import Playlist as TidalPlaylist
 
 from mopidy_tidal import full_models_mappers
 from mopidy_tidal.full_models_mappers import create_mopidy_playlist
-from mopidy_tidal.helpers import to_timestamp
+from mopidy_tidal.helpers import is_available, to_timestamp
 from mopidy_tidal.login_hack import login_hack
 from mopidy_tidal.lru_cache import LruCache
 from mopidy_tidal.utils import mock_track
@@ -54,6 +54,18 @@ class PlaylistMetadataCache(PlaylistCache):
         return super().cache_file(key, Path("playlist_metadata"))
 
 
+class PlaylistUnavailableTracksCache(LruCache):
+    """Per playlist URI, the URIs of the tracks that can't be played back.
+
+    The tracks of a cached playlist are kept complete, as `save` compares them with
+    the upstream playlist by position. Which of them to hide when browsing is
+    stored here instead, so it survives the playlist being loaded from disk.
+    """
+
+    def cache_file(self, key: str) -> Path:
+        return super().cache_file(key, Path("playlist_unavailable"))
+
+
 class TidalPlaylistsProvider(backend.PlaylistsProvider):
     backend: "TidalBackend"
 
@@ -61,6 +73,7 @@ class TidalPlaylistsProvider(backend.PlaylistsProvider):
         super().__init__(*args, **kwargs)
         self._playlists_metadata = PlaylistMetadataCache()
         self._playlists = PlaylistCache()
+        self._unavailable_tracks = PlaylistUnavailableTracksCache()
         self._current_tidal_playlists = []
         self._playlists_loaded_event = Event()
 
@@ -144,7 +157,12 @@ class TidalPlaylistsProvider(backend.PlaylistsProvider):
             return full_models_mappers.create_mopidy_mix_playlist(mix)
 
         playlist = self._playlists.get(uri)
-        if (playlist is None) or (playlist and self._has_changes(playlist)):
+        if (
+            (playlist is None)
+            or (playlist and self._has_changes(playlist))
+            # Playlists cached before unavailable tracks were tracked
+            or uri not in self._unavailable_tracks
+        ):
             self.refresh(uri, include_items=True)
         return self._playlists.get(uri)
 
@@ -182,6 +200,7 @@ class TidalPlaylistsProvider(backend.PlaylistsProvider):
 
         self._playlists_metadata.prune(uri)
         self._playlists.prune(uri)
+        self._unavailable_tracks.prune(uri)
 
     @login_hack
     def lookup(self, uri) -> Optional[MopidyPlaylist]:
@@ -200,14 +219,23 @@ class TidalPlaylistsProvider(backend.PlaylistsProvider):
 
         for pl in plists:
             uri = "tidal:playlist:" + pl.id
-            # Skip or cache hit case
-            if (uris and uri not in uris) or pl in playlist_cache:
+            # Skip or cache hit case. A cached playlist still needs its
+            # unavailable tracks to be recorded if that hasn't happened yet.
+            if (uris and uri not in uris) or (
+                pl in playlist_cache
+                and not (include_items and uri not in self._unavailable_tracks)
+            ):
                 continue
 
             # Cache miss case
             if include_items:
-                pl_tracks = self._retrieve_api_tracks(pl)
+                pl_tracks = list(self._retrieve_api_tracks(pl))
                 tracks = full_models_mappers.create_mopidy_tracks(pl_tracks)
+                self._unavailable_tracks[uri] = frozenset(
+                    track.uri
+                    for tidal_track, track in zip(pl_tracks, tracks)
+                    if not is_available(tidal_track)
+                )
             else:
                 # Create as many mock tracks as the number of items in the playlist.
                 # Playlist metadata is concerned only with the number of tracks, not
@@ -246,7 +274,14 @@ class TidalPlaylistsProvider(backend.PlaylistsProvider):
         if not playlist:
             return
 
-        return [Ref.track(uri=t.uri, name=t.name) for t in playlist.tracks]
+        # The playlist itself keeps unavailable tracks (see
+        # `PlaylistUnavailableTracksCache`), they just aren't listed
+        unavailable = self._unavailable_tracks.get(uri, ())
+        return [
+            Ref.track(uri=t.uri, name=t.name)
+            for t in playlist.tracks
+            if t.uri not in unavailable
+        ]
 
     def _retrieve_api_tracks(self, playlist):
         return playlist.tracks_paginated()

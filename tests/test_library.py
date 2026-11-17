@@ -684,3 +684,37 @@ def test_lookup_playlist_cached(
     assert res2 == res
 
     session.playlist.assert_called_with("99")
+
+
+class TestUnavailableTracks:
+    def test_browse_playlist_skips_unavailable_tracks(
+        self, library_provider, session, mocker, tidal_tracks
+    ):
+        tidal_tracks[1].available = False
+        playlist = mocker.Mock()
+        playlist.tracks_paginated.return_value = tidal_tracks
+        playlist.tracks_paginated.__name__ = "get_playlist_tracks"
+        session.playlist.return_value = playlist
+
+        refs = library_provider.browse("tidal:playlist:99")
+
+        assert [r.uri for r in refs] == [
+            t.uri for i, t in enumerate(tidal_tracks) if i != 1
+        ]
+
+    def test_lookup_playlist_skips_unavailable_tracks(
+        self, library_provider, session, mocker, tidal_tracks
+    ):
+        tidal_tracks[1].available = False
+        playlist = mocker.Mock()
+        playlist.name = "Playlist-1"
+        playlist.last_updated = 10
+        playlist.tracks_paginated.return_value = tidal_tracks
+        playlist.tracks_paginated.__name__ = "get_playlist_tracks"
+        session.playlist.return_value = playlist
+
+        res = library_provider.lookup("tidal:playlist:99")
+
+        assert [t.uri for t in res] == [
+            t.uri for i, t in enumerate(tidal_tracks) if i != 1
+        ]

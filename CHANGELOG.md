@@ -1,5 +1,12 @@
 # Changelog
 
+#### v0.3.14
+
+- Improve caching of artworks *by [2tefan](https://github.com/2tefan)* 
+- Playback proxy *by [2e0byo](https://github.com/2e0byo)*
+- Don't list tracks that TIDAL reports as unavailable when browsing, and skip them during playback
+
+
 #### v0.3.13
 
 - Bugfix: Avoid MPD manifest parsing to fix regression with new/incompatible TIDAL MPD

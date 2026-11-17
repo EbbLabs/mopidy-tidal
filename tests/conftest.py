@@ -255,6 +255,7 @@ def make_playlist(playlist_id, tracks):
         id=str(playlist_id),
         uri=f"tidal:playlist:{playlist_id}",
         tracks=tracks,
+        tracks_paginated=Mock(return_value=tracks),
         num_tracks=len(tracks),
         last_updated=10,
     )

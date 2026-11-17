@@ -1,6 +1,6 @@
 from __future__ import unicode_literals
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse
 
 import tidalapi
@@ -8,6 +8,7 @@ from login_hack import speak_login_hack
 from tidalapi.exceptions import URLNotAvailable
 
 from mopidy_tidal.gstreamer_proxy import cache
+from mopidy_tidal.helpers import is_available
 
 if TYPE_CHECKING:  # pragma: no cover
     from mopidy_tidal.backend import TidalBackend
@@ -87,23 +88,30 @@ class TidalPlaybackProvider(backend.PlaybackProvider):
         return track
 
     @speak_login_hack
-    def translate_uri(self, uri) -> str:
+    def translate_uri(self, uri) -> Optional[str]:
         logger.info("TIDAL uri: %s", uri)
 
-        if proxy := self.backend.playback_cache_for(uri):
-            id = cache.TidalID(uri)
-            if entry := proxy.cache.lookup_entry(id):
-                return proxy.config.local_url(entry.path.decode())
-            else:
-                try:
-                    url = self._track(uri).get_url()
-                except URLNotAvailable:
-                    logger.info(
-                        "No direct url available for %s, falling back to stream", uri
-                    )
-                else:
-                    path = cache.Path(urlparse(url).path.encode())
-                    proxy.cache.insert_path(id, path)
-                    return proxy.config.local_url(url)
+        proxy = self.backend.playback_cache_for(uri)
+        id = cache.TidalID(uri) if proxy else None
+        if proxy and (entry := proxy.cache.lookup_entry(id)):
+            return proxy.config.local_url(entry.path.decode())
 
-        return as_stream(self._track(uri))
+        track = self._track(uri)
+        if not is_available(track):
+            # Returning None marks the track as unplayable, and Mopidy skips it
+            logger.warning("Track %s is not available for playback, skipping", uri)
+            return None
+
+        if proxy:
+            try:
+                url = track.get_url()
+            except URLNotAvailable:
+                logger.info(
+                    "No direct url available for %s, falling back to stream", uri
+                )
+            else:
+                path = cache.Path(urlparse(url).path.encode())
+                proxy.cache.insert_path(id, path)
+                return proxy.config.local_url(url)
+
+        return as_stream(track)

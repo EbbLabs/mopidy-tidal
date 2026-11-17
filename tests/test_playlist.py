@@ -116,6 +116,7 @@ def test_save_no_changes(tpp, mocker, tidal_playlists):
     session.user.favorites.playlists_paginated.return_value = [tidal_pl]
     session.user.playlists.return_value = []
     tpp._playlists[uri] = mopidy_pl
+    tpp._unavailable_tracks[uri] = frozenset()
     tpp.save(mopidy_pl)
     assert tpp._playlists[uri] == mopidy_pl
 
@@ -479,3 +480,103 @@ def test_get_items_mix(tpp, mocker):
         Ref(name="Track-0 (version)", type="track", uri="tidal:track:0:0:0"),
         Ref(name="Track-1 (version)", type="track", uri="tidal:track:1:1:1"),
     ]
+
+
+@pytest.fixture
+def persistent_tpp(mocker):
+    """Providers sharing the same on-disk caches, like consecutive runs."""
+    mocker.patch("mopidy_tidal.playlists.Timer")
+    backend = mocker.Mock()
+    backend._config = {"tidal": {"playlist_cache_refresh_secs": 0}}
+
+    def make():
+        return TidalPlaylistsProvider(backend)
+
+    return make, backend
+
+
+def _setup_playlist(backend, tidal_pl):
+    backend.session.playlist.return_value = tidal_pl
+    backend.session.user.favorites.playlists_paginated.__name__ = "pl"
+    backend.session.user.favorites.playlists_paginated.return_value = [tidal_pl]
+
+
+def test_get_items_skips_unavailable_tracks(persistent_tpp, tidal_playlists):
+    make, backend = persistent_tpp
+    tidal_pl = tidal_playlists[0]
+    tidal_pl.tracks[1].available = False
+    _setup_playlist(backend, tidal_pl)
+    tpp = make()
+    tpp._current_tidal_playlists = [tidal_pl]
+
+    refs = tpp.get_items(tidal_pl.uri)
+
+    assert [r.uri for r in refs] == [tidal_pl.tracks[0].uri]
+
+
+def test_unavailable_tracks_stay_in_the_playlist(persistent_tpp, tidal_playlists):
+    # save() compares the playlist with the upstream one by position, so the
+    # playlist must keep every track.
+    make, backend = persistent_tpp
+    tidal_pl = tidal_playlists[0]
+    tidal_pl.tracks[1].available = False
+    _setup_playlist(backend, tidal_pl)
+    tpp = make()
+    tpp._current_tidal_playlists = [tidal_pl]
+
+    playlist = tpp.lookup(tidal_pl.uri)
+
+    assert [t.uri for t in playlist.tracks] == [t.uri for t in tidal_pl.tracks]
+
+
+def test_unavailable_tracks_are_remembered_across_restarts(
+    persistent_tpp, tidal_playlists
+):
+    make, backend = persistent_tpp
+    tidal_pl = tidal_playlists[0]
+    tidal_pl.tracks[1].available = False
+    _setup_playlist(backend, tidal_pl)
+    first = make()
+    first._current_tidal_playlists = [tidal_pl]
+    first.get_items(tidal_pl.uri)
+
+    second = make()
+    refs = second.get_items(tidal_pl.uri)
+
+    assert [r.uri for r in refs] == [tidal_pl.tracks[0].uri]
+    # Served from the cache, the tracks were not fetched again
+    assert tidal_pl.tracks_paginated.call_count == 1
+
+
+def test_playlist_cached_before_availability_was_tracked_is_refreshed(
+    persistent_tpp, tidal_playlists
+):
+    make, backend = persistent_tpp
+    tidal_pl = tidal_playlists[0]
+    tidal_pl.tracks[1].available = False
+    _setup_playlist(backend, tidal_pl)
+    tpp = make()
+    tpp._current_tidal_playlists = [tidal_pl]
+    tpp.refresh(tidal_pl.uri)
+    tpp._unavailable_tracks.prune(tidal_pl.uri)  # as if cached by an older version
+
+    refs = tpp.get_items(tidal_pl.uri)
+
+    assert [r.uri for r in refs] == [tidal_pl.tracks[0].uri]
+
+
+def test_unavailable_tracks_are_forgotten_when_a_playlist_is_deleted(
+    persistent_tpp, tidal_playlists
+):
+    make, backend = persistent_tpp
+    tidal_pl = tidal_playlists[0]
+    tidal_pl.tracks[1].available = False
+    _setup_playlist(backend, tidal_pl)
+    tpp = make()
+    tpp._current_tidal_playlists = [tidal_pl]
+    tpp.refresh(tidal_pl.uri)
+    assert tidal_pl.uri in tpp._unavailable_tracks
+
+    tpp.delete(tidal_pl.uri)
+
+    assert tidal_pl.uri not in tpp._unavailable_tracks
