@@ -2,12 +2,11 @@
 
 #### v0.3.14
 
-- Improve caching of artworks *by [2tefan](https://github.com/2tefan)* 
+- Improve caching of artworks *by [2tefan](https://github.com/2tefan)*
 - Playback proxy *by [2e0byo](https://github.com/2e0byo)*
 - Don't list tracks that TIDAL reports as unavailable when browsing, and skip them during playback
 - Log the codec and bitrate when playing MPD streams (e.g. hi-res FLAC)
 - tidalapi version bump to v0.9.0
-
 
 #### v0.3.13
 
